@@ -3,8 +3,8 @@ var fs = require('fs')
 
 var file = fileReader('index.js')
 
-file.read(0, 10, (err, buf) => console.log('0-10: ' + buf.toString())
-file.read(40, 15, (err, buf) => console.log('40-55: ' + buf.toString())
+file.read(0, 10, (_, buf) => console.log('0-10: ' + buf.toString()))
+file.read(40, 15, (_, buf) => console.log('40-55: ' + buf.toString()))
 file.close()
 
 function fileReader (name) {
@@ -31,4 +31,3 @@ function fileReader (name) {
     }
   })
 }
-

@@ -1,20 +1,26 @@
 {
-  "name": "random-access",
+  "name": "random-access-storage",
   "version": "0.0.0",
-  "description": "Easily make random-access instances",
+  "description": "Easily make random-access-storage instances",
   "main": "index.js",
   "dependencies": {
-    "thunky": "^1.0.2"
+    "inherits": "^2.0.3"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "standard": "^10.0.3",
+    "tape": "^4.8.0"
+  },
+  "scripts": {
+    "test": "standard && tape test.js"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mafintosh/random-access.git"
+    "url": "https://github.com/random-access-storage/random-access-storage.git"
   },
   "author": "Mathias Buus (@mafintosh)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mafintosh/random-access/issues"
+    "url": "https://github.com/random-access-storage/random-access-storage/issues"
   },
-  "homepage": "https://github.com/mafintosh/random-access"
+  "homepage": "https://github.com/random-access-storage/random-access-storage"
 }
