@@ -27,6 +27,7 @@ function RandomAccess (opts) {
     if (opts.write) this._write = opts.write
     if (opts.del) this._del = opts.del
     if (opts.stat) this._stat = opts.stat
+    if (opts.close) this._close = opts.close
   }
 
   this.preferReadonly = this._openReadonly !== NO_OPEN_READABLE
