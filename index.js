@@ -195,7 +195,7 @@ Request.prototype._run = function () {
       break
 
     case 5:
-      if (ra.closed) return nextTick(this, null)
+      if (ra.closed || !ra.opened) return nextTick(this, null)
       ra._close(this)
       break
 

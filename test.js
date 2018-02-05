@@ -184,7 +184,6 @@ tape('close', function (t) {
   t.plan(7)
 
   var s = ras({
-    open: () => t.fail('no open'),
     close: function (req) {
       t.pass('closing')
       req.callback(null)
@@ -192,6 +191,26 @@ tape('close', function (t) {
   })
 
   s.on('close', () => t.pass('close emitted'))
+  s.open()
+  s.close()
+  s.close()
+  s.close(function () {
+    t.pass('calls the callback')
+  })
+
+  s.read(0, 10, err => t.same(err, new Error('Closed')))
+  s.stat(err => t.same(err, new Error('Closed')))
+  s.write(0, Buffer.from('hi'), err => t.same(err, new Error('Closed')))
+  s.del(0, 10, err => t.same(err, new Error('Closed')))
+})
+
+tape('close, no open', function (t) {
+  t.plan(5)
+
+  var s = ras({
+    close: req => t.fail('only close if open')
+  })
+
   s.close()
   s.close()
   s.close(function () {
@@ -237,6 +256,7 @@ tape('destroy closes first', function (t) {
     }
   })
 
+  s.open()
   s.destroy()
 })
 
@@ -254,6 +274,7 @@ tape('destroy with explicit close first', function (t) {
     }
   })
 
+  s.open()
   s.close()
   s.destroy()
 })
