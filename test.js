@@ -181,7 +181,7 @@ tape('open before read', function (t) {
 })
 
 tape('close', function (t) {
-  t.plan(6)
+  t.plan(7)
 
   var s = ras({
     open: () => t.fail('no open'),
@@ -191,6 +191,7 @@ tape('close', function (t) {
     }
   })
 
+  s.on('close', () => t.pass('close emitted'))
   s.close()
   s.close()
   s.close(function () {
@@ -201,6 +202,60 @@ tape('close', function (t) {
   s.stat(err => t.same(err, new Error('Closed')))
   s.write(0, Buffer.from('hi'), err => t.same(err, new Error('Closed')))
   s.del(0, 10, err => t.same(err, new Error('Closed')))
+})
+
+tape('destroy', function (t) {
+  t.plan(4)
+
+  var s = ras({
+    open: req => t.fail('no open'),
+    destroy: function (req) {
+      t.pass('destroying')
+      req.callback(null)
+    }
+  })
+
+  s.on('destroy', () => t.pass('destroy emitted'))
+  s.destroy()
+  s.destroy(function (err) {
+    t.error(err, 'no error')
+    t.pass('calls the callback')
+  })
+})
+
+tape('destroy closes first', function (t) {
+  t.plan(2)
+
+  var s = ras({
+    close: function (req) {
+      t.pass('closing')
+      req.callback(null)
+    },
+    destroy: function (req) {
+      t.ok(s.closed, 'is closed')
+      req.callback(null)
+    }
+  })
+
+  s.destroy()
+})
+
+tape('destroy with explicit close first', function (t) {
+  t.plan(2)
+
+  var s = ras({
+    close: function (req) {
+      t.pass('closing')
+      req.callback(null)
+    },
+    destroy: function (req) {
+      t.ok(s.closed, 'is closed')
+      req.callback(null)
+    }
+  })
+
+  s.close()
+  s.destroy()
 })
 
 tape('open and close', function (t) {

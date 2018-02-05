@@ -70,24 +70,37 @@ Make a new instance. Options include:
   del: fn, // sets ._del
   stat: fn, // sets ._stat
   close: fn, // sets ._close
+  destroy: fn // sets ._destroy
 }
 ```
 
 #### `storage.readable`
 
-True is the storage implements `._read`.
+True if the storage implements `._read`.
 
 #### `storage.writable`
 
-True is the storage implements `._write`.
+True if the storage implements `._write`.
 
 #### `storage.deletable`
 
-True is the storage implements `._del`.
+True if the storage implements `._del`.
 
 #### `storage.statable`
 
-True is the storage implements `._stat`.
+True if the storage implements `._stat`.
+
+#### `storage.opened`
+
+True if the storage has been fully opened.
+
+#### `storage.closed`
+
+True if the storage has been fully closed.
+
+#### `storage.destroyed`
+
+True is the destorage has been fully destroyed.
 
 #### `storage.on('open')`
 
@@ -96,6 +109,10 @@ Emitted when the storage is fully open.
 #### `storage.on('close')`
 
 Emitted when the storage is fully closed.
+
+#### `storage.on('destroy')
+
+Emitted when the storage is fully destroyed.
 
 #### `storage.open(cb)`
 
@@ -199,6 +216,18 @@ Implement storage close.
 Call `req.callback(err)` when the storage is fully closed.
 
 Note this is guaranteed to run after all pending read/write/stat/del operations has finished and no methods will run after.
+
+#### `storage.destroy([callback])`
+
+Destroy the storage instance, removing all underlying data.
+
+#### `storage._destroy(req)`
+
+Implement storage destroy.
+
+Call `req.callback(err)` when the storage has been fully destroyed.
+
+Note this is guaranteed to run after `.close()` has been called and no methods will be run after.
 
 ## License
 

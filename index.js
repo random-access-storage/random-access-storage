@@ -19,6 +19,7 @@ function RandomAccess (opts) {
 
   this.opened = false
   this.closed = false
+  this.destroyed = false
 
   if (opts) {
     if (opts.openReadonly) this._openReadonly = opts.openReadonly
@@ -28,6 +29,7 @@ function RandomAccess (opts) {
     if (opts.del) this._del = opts.del
     if (opts.stat) this._stat = opts.stat
     if (opts.close) this._close = opts.close
+    if (opts.destroy) this._destroy = opts.destroy
   }
 
   this.preferReadonly = this._openReadonly !== NO_OPEN_READABLE
@@ -84,6 +86,14 @@ RandomAccess.prototype.close = function (cb) {
 
 RandomAccess.prototype._close = defaultImpl(null)
 
+RandomAccess.prototype.destroy = function (cb) {
+  if (!cb) cb = noop
+  if (!this.closed) this.close(noop)
+  queueAndRun(this, new Request(this, 6, 0, 0, null, cb))
+}
+
+RandomAccess.prototype._destroy = defaultImpl(null)
+
 RandomAccess.prototype.run = function (req) {
   if (this._needsOpen) this.open(noop)
   if (this._queued.length) this._queued.push(req)
@@ -107,12 +117,27 @@ Request.prototype._unqueue = function (err) {
   var queued = ra._queued
 
   if (!err) {
-    if (this.type === 0 && !ra.opened) {
-      ra.opened = true
-      ra.emit('open')
-    } else if (this.type === 5 && !ra.closed) {
-      ra.closed = true
-      ra.emit('close')
+    switch (this.type) {
+      case 0:
+        if (!ra.opened) {
+          ra.opened = true
+          ra.emit('open')
+        }
+        break
+
+      case 5:
+        if (!ra.closed) {
+          ra.closed = true
+          ra.emit('close')
+        }
+        break
+
+      case 6:
+        if (!ra.destroyed) {
+          ra.destroyed = true
+          ra.emit('destroy')
+        }
+        break
     }
   }
 
@@ -172,6 +197,11 @@ Request.prototype._run = function () {
     case 5:
       if (ra.closed) return nextTick(this, null)
       ra._close(this)
+      break
+
+    case 6:
+      if (ra.destroyed) return nextTick(this, null)
+      ra._destroy(this)
       break
   }
 }
