@@ -413,3 +413,26 @@ tape('always async', function (t) {
     sync = false
   })
 })
+
+tape('open error forwarded to dependents', function (t) {
+  var s = ras({
+    open: req => req.callback(new Error('Nope')),
+    read: req => req.callback(null, Buffer.from('hi')),
+    write: req => req.callback(null, null)
+  })
+
+  s.write(0, Buffer.from('hi'), function (err) {
+    t.ok(err)
+    t.same(err.message, 'Nope')
+  })
+
+  s.read(0, 2, function (err) {
+    t.ok(err)
+    t.same(err.message, 'Nope')
+  })
+
+  s.close(function (err) {
+    t.ok(!err)
+    t.end()
+  })
+})

@@ -111,6 +111,13 @@ function Request (self, type, offset, size, data, cb) {
 
   this._sync = false
   this._callback = cb
+  this._openError = null
+}
+
+Request.prototype._maybeOpenError = function (err) {
+  if (this.type !== 0) return
+  var queued = this.storage._queued
+  for (var i = 0; i < queued.length; i++) queued[i]._openError = err
 }
 
 Request.prototype._unqueue = function (err) {
@@ -140,6 +147,8 @@ Request.prototype._unqueue = function (err) {
         }
         break
     }
+  } else {
+    this._maybeOpenError(err)
   }
 
   if (queued.length && queued[0] === this) queued.shift()
@@ -155,7 +164,7 @@ Request.prototype.callback = function (err, val) {
 Request.prototype._openAndNotClosed = function () {
   var ra = this.storage
   if (ra.opened && !ra.closed) return true
-  if (!ra.opened) nextTick(this, new Error('Not opened'))
+  if (!ra.opened) nextTick(this, this._openError || new Error('Not opened'))
   else if (ra.closed) nextTick(this, new Error('Closed'))
   return false
 }
