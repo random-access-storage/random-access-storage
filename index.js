@@ -41,17 +41,8 @@ function RandomAccess (opts) {
 
 inherits(RandomAccess, events.EventEmitter)
 
-RandomAccess.prototype.open = function (cb) {
-  if (!cb) cb = noop
-  if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
-  queueAndRun(this, new Request(this, 0, 0, 0, null, cb))
-}
-
-RandomAccess.prototype._open = defaultImpl(null)
-RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
-
 RandomAccess.prototype.read = function (offset, size, cb) {
-  this.run(new Request(this, 1, offset, size, null, cb))
+  this.run(new Request(this, 0, offset, size, null, cb))
 }
 
 RandomAccess.prototype._read = NOT_READABLE
@@ -59,7 +50,7 @@ RandomAccess.prototype._read = NOT_READABLE
 RandomAccess.prototype.write = function (offset, data, cb) {
   if (!cb) cb = noop
   openWritable(this)
-  this.run(new Request(this, 2, offset, data.length, data, cb))
+  this.run(new Request(this, 1, offset, data.length, data, cb))
 }
 
 RandomAccess.prototype._write = NOT_WRITABLE
@@ -67,16 +58,25 @@ RandomAccess.prototype._write = NOT_WRITABLE
 RandomAccess.prototype.del = function (offset, size, cb) {
   if (!cb) cb = noop
   openWritable(this)
-  this.run(new Request(this, 3, offset, size, null, cb))
+  this.run(new Request(this, 2, offset, size, null, cb))
 }
 
 RandomAccess.prototype._del = NOT_DELETABLE
 
 RandomAccess.prototype.stat = function (cb) {
-  this.run(new Request(this, 4, 0, 0, null, cb))
+  this.run(new Request(this, 3, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._stat = NOT_STATABLE
+
+RandomAccess.prototype.open = function (cb) {
+  if (!cb) cb = noop
+  if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
+  queueAndRun(this, new Request(this, 4, 0, 0, null, cb))
+}
+
+RandomAccess.prototype._open = defaultImpl(null)
+RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
 
 RandomAccess.prototype.close = function (cb) {
   if (!cb) cb = noop
@@ -115,7 +115,7 @@ function Request (self, type, offset, size, data, cb) {
 }
 
 Request.prototype._maybeOpenError = function (err) {
-  if (this.type !== 0) return
+  if (this.type !== 4) return
   var queued = this.storage._queued
   for (var i = 0; i < queued.length; i++) queued[i]._openError = err
 }
@@ -126,7 +126,7 @@ Request.prototype._unqueue = function (err) {
 
   if (!err) {
     switch (this.type) {
-      case 0:
+      case 4:
         if (!ra.opened) {
           ra.opened = true
           ra.emit('open')
@@ -152,7 +152,8 @@ Request.prototype._unqueue = function (err) {
   }
 
   if (queued.length && queued[0] === this) queued.shift()
-  if (!--ra._pending && queued.length) queued[0]._run()
+
+  if (!--ra._pending) drainQueue(ra)
 }
 
 Request.prototype.callback = function (err, val) {
@@ -188,23 +189,23 @@ Request.prototype._run = function () {
 
   switch (this.type) {
     case 0:
-      this._open()
-      break
-
-    case 1:
       if (this._openAndNotClosed()) ra._read(this)
       break
 
-    case 2:
+    case 1:
       if (this._openAndNotClosed()) ra._write(this)
       break
 
-    case 3:
+    case 2:
       if (this._openAndNotClosed()) ra._del(this)
       break
 
-    case 4:
+    case 3:
       if (this._openAndNotClosed()) ra._stat(this)
+      break
+
+    case 4:
+      this._open()
       break
 
     case 5:
@@ -224,6 +225,16 @@ Request.prototype._run = function () {
 function queueAndRun (self, req) {
   self._queued.push(req)
   if (!self._pending) req._run()
+}
+
+function drainQueue (self) {
+  var queued = self._queued
+
+  while (queued.length > 0) {
+    queued[0]._run()
+    if (queued[0].type > 3) return // all >3 types are blocking
+    queued.shift()
+  }
 }
 
 function openWritable (self) {
