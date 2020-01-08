@@ -6,6 +6,7 @@ var NOT_WRITABLE = defaultImpl(new Error('Not writable'))
 var NOT_DELETABLE = defaultImpl(new Error('Not deletable'))
 var NOT_STATABLE = defaultImpl(new Error('Not statable'))
 var NO_OPEN_READABLE = defaultImpl(new Error('No readonly open'))
+var CANNOT_READDIR = defaultImpl(new Error('Can not read directory'))
 
 module.exports = RandomAccess
 
@@ -28,6 +29,7 @@ function RandomAccess (opts) {
     if (opts.write) this._write = opts.write
     if (opts.del) this._del = opts.del
     if (opts.stat) this._stat = opts.stat
+    if (opts.readdir) this._readdir = opts.readdir
     if (opts.close) this._close = opts.close
     if (opts.destroy) this._destroy = opts.destroy
   }
@@ -37,6 +39,7 @@ function RandomAccess (opts) {
   this.writable = this._write !== NOT_WRITABLE
   this.deletable = this._del !== NOT_DELETABLE
   this.statable = this._stat !== NOT_STATABLE
+  this.canReaddir = this._readdir !== CANNOT_READDIR
 }
 
 inherits(RandomAccess, events.EventEmitter)
@@ -68,6 +71,12 @@ RandomAccess.prototype.stat = function (cb) {
 }
 
 RandomAccess.prototype._stat = NOT_STATABLE
+
+RandomAccess.prototype.readdir = function (cb) {
+  this.run(new Request(this, 7, 0, 0, null, cb))
+}
+
+RandomAccess.prototype._readdir = CANNOT_READDIR
 
 RandomAccess.prototype.open = function (cb) {
   if (!cb) cb = noop
@@ -216,6 +225,10 @@ Request.prototype._run = function () {
     case 6:
       if (ra.destroyed) nextTick(this, null)
       else ra._destroy(this)
+      break
+
+    case 7:
+      if (this._openAndNotClosed()) ra._readdir(this)
       break
   }
 

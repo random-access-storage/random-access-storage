@@ -69,6 +69,7 @@ Make a new instance. Options include:
   write: fn, // sets ._write
   del: fn, // sets ._del
   stat: fn, // sets ._stat
+  readdir: fn, // sets ._readdir
   close: fn, // sets ._close
   destroy: fn // sets ._destroy
 }
@@ -89,6 +90,10 @@ True if the storage implements `._del`.
 #### `storage.statable`
 
 True if the storage implements `._stat`.
+
+#### `storage.canReaddir`
+
+True if the storage implements `._readdir`.
 
 #### `storage.opened`
 
@@ -202,6 +207,18 @@ Stat the storage. Should return an object with useful information about the unde
 Implement storage stat.
 
 Call `req.callback(err, statObject)` when the stat has completed.
+
+Note that this is guaranteed to run after the storage has been opened and not after it has been closed.
+
+#### `storage.readdir(callback)`
+
+Read the storage directory information. Should return an array with strings of child paths.
+
+#### `storage._readdir(req)`
+
+Implement storage readdir.
+
+Call `req.callback(err, listItems)` when the readdir has completed.
 
 Note that this is guaranteed to run after the storage has been opened and not after it has been closed.
 

@@ -436,3 +436,26 @@ tape('open error forwarded to dependents', function (t) {
     t.end()
   })
 })
+
+tape('readdir on path', function (t) {
+  var s = ras({
+    readdir: req => req.callback(null, [ 'hello' ])
+  })
+
+  s.readdir((err, paths) => {
+    t.error(err)
+    t.same(paths[0], 'hello')
+    t.end()
+  })
+})
+
+tape('readdir error propagation', function (t) {
+  var s = ras({
+    readdir: req => req.callback(new Error('readdir error'))
+  })
+
+  s.readdir((err) => {
+    t.same(err.message, 'readdir error')
+    t.end()
+  })
+})
