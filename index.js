@@ -15,6 +15,9 @@ function RandomAccess (opts) {
 
   this._queued = []
   this._pending = 0
+  // Indicates whether open needs to be performed. Once `_open` is run is set
+  // to `false`. However it might still can be `true` even after open succeeds,
+  // e.g. if write is performed when it was open in read-only mode.
   this._needsOpen = true
 
   this.opened = false
@@ -24,6 +27,7 @@ function RandomAccess (opts) {
   if (opts) {
     if (opts.openReadonly) this._openReadonly = opts.openReadonly
     if (opts.open) this._open = opts.open
+    if (opts.reopen) this._reopen = opts.reopen
     if (opts.read) this._read = opts.read
     if (opts.write) this._write = opts.write
     if (opts.del) this._del = opts.del
@@ -41,6 +45,9 @@ function RandomAccess (opts) {
 
 inherits(RandomAccess, events.EventEmitter)
 
+// Following operations (read, write, del, stat) are non-blocking, meaning they
+// do not need get queued unless blocking operation is pending. If blocking
+// operation is pending then they get scheduled to run after.
 RandomAccess.prototype.read = function (offset, size, cb) {
   this.run(new Request(this, 0, offset, size, null, cb))
 }
@@ -69,6 +76,13 @@ RandomAccess.prototype.stat = function (cb) {
 
 RandomAccess.prototype._stat = NOT_STATABLE
 
+// Following operations (open, close) are blocking, meaning operations will
+// get queued to run after blocking operation is complete.
+
+// Schedules open after all currently pending and queued operations. That is
+// unless it is already open and no reopenening is required (which may occur
+// e.g. when open in readonly mode, but read/write mode is needed). If later
+// just succeeds.
 RandomAccess.prototype.open = function (cb) {
   if (!cb) cb = noop
   if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
@@ -78,6 +92,8 @@ RandomAccess.prototype.open = function (cb) {
 RandomAccess.prototype._open = defaultImpl(null)
 RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
 
+// Scheduled close after all currently pending and queued operations, unless
+// it's already closed.
 RandomAccess.prototype.close = function (cb) {
   if (!cb) cb = noop
   if (this.closed) return process.nextTick(cb, null)
@@ -86,6 +102,8 @@ RandomAccess.prototype.close = function (cb) {
 
 RandomAccess.prototype._close = defaultImpl(null)
 
+// Schedules destroy after all currently pending and queued operations. Also
+// takes care of scheduling close unless already closed.
 RandomAccess.prototype.destroy = function (cb) {
   if (!cb) cb = noop
   if (!this.closed) this.close(noop)
@@ -94,8 +112,12 @@ RandomAccess.prototype.destroy = function (cb) {
 
 RandomAccess.prototype._destroy = defaultImpl(null)
 
+// Queues request if blocking operation is pending, otherwise runs it. If
+// opening is required (e.g. not open yet, or write is performed while open in
+// read-only mode) open is arranged first.
 RandomAccess.prototype.run = function (req) {
   if (this._needsOpen) this.open(noop)
+  else if (this.closed && this._reopen) this.open(noop)
   if (this._queued.length) this._queued.push(req)
   else req._run()
 }
@@ -129,6 +151,7 @@ Request.prototype._unqueue = function (err) {
       case 4:
         if (!ra.opened) {
           ra.opened = true
+          ra.closed = false
           ra.emit('open')
         }
         break
@@ -136,6 +159,7 @@ Request.prototype._unqueue = function (err) {
       case 5:
         if (!ra.closed) {
           ra.closed = true
+          ra.opened = false
           ra.emit('close')
         }
         break
@@ -173,9 +197,12 @@ Request.prototype._openAndNotClosed = function () {
 Request.prototype._open = function () {
   var ra = this.storage
 
+  // Succeed if already open and no reopening is required.
   if (ra.opened && !ra._needsOpen) return nextTick(this, null)
-  if (ra.closed) return nextTick(this, new Error('Closed'))
+  // Fail if already closed and reopening is not enabled.
+  if (ra.closed && !ra._reopen) return nextTick(this, new Error('Closed'))
 
+  // In all other cases perform open in appropriate mode.
   ra._needsOpen = false
   if (ra.preferReadonly) ra._openReadonly(this)
   else ra._open(this)
@@ -222,6 +249,7 @@ Request.prototype._run = function () {
   this._sync = false
 }
 
+// Schedules to run request after all currently pending requests.
 function queueAndRun (self, req) {
   self._queued.push(req)
   if (!self._pending) req._run()
@@ -229,6 +257,14 @@ function queueAndRun (self, req) {
 
 function drainQueue (self) {
   var queued = self._queued
+  if (queued.length === 0) return
+
+  // If closed when we start drainging the queue but reopen
+  // mode is enabled reopen and then drain queue.
+  if (self.closed && self._reopen) {
+    const req = new Request(self, 4, 0, 0, null, noop)
+    queued.unshift(req)
+  }
 
   while (queued.length > 0) {
     queued[0]._run()

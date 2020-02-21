@@ -436,3 +436,117 @@ tape('open error forwarded to dependents', function (t) {
     t.end()
   })
 })
+
+tape('reaopen on read', function (t) {
+  var ondataN = 4
+  var readN = 1
+  var openN = 1
+  var closeN = 1
+  var oncloseN = 1
+  var isOpenN = 1
+
+  t.plan(openN * 2 +
+         readN * 3 +
+         ondataN * 3 +
+         closeN * 1 +
+         oncloseN * 1 +
+         isOpenN * 1
+         )
+
+  var opened = 0
+  var closed = 0
+
+  var s = ras({
+    reopen: true,
+    open: function (req) {
+      t.ok(opened - closed === 0, "isn't open on open")
+      opened++
+      req.callback(null)
+    },
+    close: function (req) {
+      t.ok(opened > 0, 'open on close')
+      closed++
+      req.callback(null)
+    },
+    read: function (req) {
+      t.ok(opened > 0, 'open on read')
+      req.callback(null, Buffer.from('hi'))
+    }
+  })
+
+  t.notOk(s.opened, 'opened property not set')
+  s.read(0, 2, ondata)
+  s.read(0, 2, ondata)
+
+  s.close(onclose)
+  s.read(0, 2, ondata)
+
+  function onclose (err) {
+    t.error(err, 'no error on close')
+  }
+
+  function ondata (err, data) {
+    t.error(err, 'no error on read')
+    t.ok(opened > 0, 'opened on read')
+    t.ok(s.opened, 'opened property set')
+    t.same(data, Buffer.from('hi'), 'read expected data')
+  }
+})
+
+tape('reaopen on read, after close is done', function (t) {
+  var ondataN = 4
+  var readN = 1
+  var openN = 1
+  var closeN = 2
+  var oncloseN = 1
+  var isOpenN = 1
+
+  t.plan(
+    openN * 2 +
+      readN * 3 +
+      ondataN * 3 +
+      closeN * 1 +
+      oncloseN * 1 +
+      isOpenN * 1
+  )
+
+  var opened = 0
+  var closed = 0
+
+  var s = ras({
+    reopen: true,
+    open: function (req) {
+      t.ok(opened - closed === 0, "isn't open on open")
+      opened++
+      req.callback(null)
+    },
+    close: function (req) {
+      t.ok(opened > 0, 'open on close')
+      closed++
+      req.callback(null)
+    },
+    read: function (req) {
+      t.ok(opened > 0, 'open on read')
+      req.callback(null, Buffer.from('hi'))
+    }
+  })
+
+  t.notOk(s.opened, 'opened property not set')
+  s.read(0, 2, ondata)
+  s.read(0, 2, ondata)
+
+  s.close((err) => {
+    t.error(err, 'no error on close')
+    t.ok(s.closed, 'closed when close handler is called')
+    setTimeout(() => {
+      s.read(0, 2, ondata)
+    }, 10)
+  })
+
+  function ondata (err, data) {
+    t.error(err, 'no error on read')
+    t.ok(opened > 0, 'opened on read')
+    t.ok(s.opened, 'opened property set')
+    t.same(data, Buffer.from('hi'), 'read expected data')
+  }
+})
