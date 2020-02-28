@@ -436,3 +436,25 @@ tape('open error forwarded to dependents', function (t) {
     t.end()
   })
 })
+
+tape('close immediately', function (t) {
+  t.plan(11)
+
+  var closed = false
+  var s = ras({
+    read (req) {
+      setImmediate(function () {
+        t.ok(!closed)
+        req.callback(null, Buffer.alloc(1))
+      })
+    },
+    close (req) {
+      closed = true
+      t.pass('closed')
+      req.callback()
+    }
+  })
+
+  for (var i = 0; i < 10; i++) s.read(0, 1, () => {})
+  s.close()
+})
