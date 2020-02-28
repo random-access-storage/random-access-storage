@@ -242,8 +242,9 @@ function drainQueue (self) {
   var queued = self._queued
 
   while (queued.length > 0) {
-    queued[0]._run()
-    if (queued[0].type > 3) return // all >3 types are blocking
+    var blocking = queued[0].type > 3
+    if (!blocking || !self._pending) queued[0]._run()
+    if (blocking) return
     queued.shift()
   }
 }
