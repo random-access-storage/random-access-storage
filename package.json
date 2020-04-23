@@ -3,6 +3,7 @@
   "version": "1.4.1",
   "description": "Easily make random-access-storage instances",
   "main": "index.js",
+  "types": "index.d.ts",
   "dependencies": {
     "inherits": "^2.0.3"
   },
