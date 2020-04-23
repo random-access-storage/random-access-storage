@@ -53,36 +53,65 @@ function RandomAccess (opts) {
 inherits(RandomAccess, events.EventEmitter)
 
 RandomAccess.prototype.read = function (offset, size, cb) {
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      this.run(new Request(this, READ_OP, offset, size, null, resolve, reject))
+    })
+  }
+
   this.run(new Request(this, READ_OP, offset, size, null, cb))
 }
 
 RandomAccess.prototype._read = NOT_READABLE
 
 RandomAccess.prototype.write = function (offset, data, cb) {
-  if (!cb) cb = noop
   openWritable(this)
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      this.run(new Request(this, WRITE_OP, offset, data.length, data, resolve, reject))
+    })
+  }
+
   this.run(new Request(this, WRITE_OP, offset, data.length, data, cb))
 }
 
 RandomAccess.prototype._write = NOT_WRITABLE
 
 RandomAccess.prototype.del = function (offset, size, cb) {
-  if (!cb) cb = noop
   openWritable(this)
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      this.run(new Request(this, DEL_OP, offset, size, null, resolve, reject))
+    })
+  }
+
   this.run(new Request(this, DEL_OP, offset, size, null, cb))
 }
 
 RandomAccess.prototype._del = NOT_DELETABLE
 
 RandomAccess.prototype.stat = function (cb) {
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      this.run(new Request(this, STAT_OP, 0, 0, null, resolve, reject))
+    })
+  }
+
   this.run(new Request(this, STAT_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._stat = NOT_STATABLE
 
 RandomAccess.prototype.open = function (cb) {
-  if (!cb) cb = noop
-  if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
+  if (this.opened && !this._needsOpen) {
+    return !cb ? Promise.resolve() : process.nextTick(cb, null)
+  }
+
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, resolve, reject))
+    })
+  }
   queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, cb))
 }
 
@@ -90,16 +119,30 @@ RandomAccess.prototype._open = defaultImpl(null)
 RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
 
 RandomAccess.prototype.close = function (cb) {
-  if (!cb) cb = noop
-  if (this.closed) return process.nextTick(cb, null)
+  if (this.closed) {
+    return !cb ? Promise.resolve() : process.nextTick(cb, null)
+  }
+
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, resolve, reject))
+    })
+  }
+
   queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._close = defaultImpl(null)
 
 RandomAccess.prototype.destroy = function (cb) {
-  if (!cb) cb = noop
   if (!this.closed) this.close(noop)
+
+  if (!cb) {
+    return new Promise((resolve, reject) => {
+      queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, resolve, reject))
+    })
+  }
+
   queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, cb))
 }
 
@@ -113,7 +156,7 @@ RandomAccess.prototype.run = function (req) {
 
 function noop () {}
 
-function Request (self, type, offset, size, data, cb) {
+function Request (self, type, offset, size, data, cbOrResolve, reject) {
   this.type = type
   this.offset = offset
   this.data = data
@@ -121,8 +164,10 @@ function Request (self, type, offset, size, data, cb) {
   this.storage = self
 
   this._sync = false
-  this._callback = cb
+  this._callback = cbOrResolve
+  this._reject = reject
   this._openError = null
+  this._isPromise = !!reject
 }
 
 Request.prototype._maybeOpenError = function (err) {
@@ -170,7 +215,15 @@ Request.prototype._unqueue = function (err) {
 Request.prototype.callback = function (err, val) {
   if (this._sync) return nextTick(this, err, val)
   this._unqueue(err)
-  this._callback(err, val)
+  if (this._isPromise) {
+    if (err) {
+      this._reject(err)
+    } else {
+      this._callback(val)
+    }
+  } else {
+    this._callback(err, val)
+  }
 }
 
 Request.prototype._openAndNotClosed = function () {

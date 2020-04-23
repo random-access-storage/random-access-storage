@@ -29,6 +29,36 @@ tape('basic read', function (t) {
   }
 })
 
+tape('basic read (Promise)', function (t) {
+  t.plan(10)
+  var expected = [Buffer.from('hi'), Buffer.from('ho')]
+  var queued = expected.slice(0)
+  var s = ras({
+    read: function (req) {
+      process.nextTick(function () {
+        t.same(req.offset, 0)
+        t.same(req.size, 2)
+        req.callback(null, queued.shift())
+      })
+    }
+  })
+
+  t.ok(s.readable)
+  t.notOk(s.writable)
+  t.notOk(s.deletable)
+  t.notOk(s.statable)
+  assertPromise(s.read(0, 2))
+  assertPromise(s.read(0, 2))
+
+  function assertPromise (promise) {
+    promise.then(function (data) {
+      t.same(data, expected.shift())
+    }).catch(function (err) {
+      t.error(err, 'no error')
+    })
+  }
+})
+
 tape('basic write', function (t) {
   t.plan(2 * 2 + 4)
 
@@ -49,6 +79,33 @@ tape('basic write', function (t) {
 
   function onwrite (err, write) {
     t.error(err, 'no error')
+  }
+})
+
+tape('basic write (Promise)', function (t) {
+  t.plan(6)
+
+  var expected = [Buffer.from('hi'), Buffer.from('ho')]
+  var s = ras({
+    write: function (req) {
+      t.same(req.data, expected.shift())
+      req.callback(null)
+    }
+  })
+
+  t.notOk(s.readable)
+  t.ok(s.writable)
+  t.notOk(s.deletable)
+  t.notOk(s.statable)
+  assertPromise(s.write(0, Buffer.from('hi')))
+  assertPromise(s.write(0, Buffer.from('ho')))
+
+  function assertPromise (promise) {
+    promise.then(function () {
+      // do nothing
+    }).catch(function (err) {
+      t.error(err, 'no error')
+    })
   }
 })
 
@@ -76,6 +133,34 @@ tape('basic del', function (t) {
   }
 })
 
+tape('basic del (Promise)', function (t) {
+  t.plan(8)
+
+  var s = ras({
+    del: function (req) {
+      t.same(req.offset, 0)
+      t.same(req.size, 2)
+      req.callback(null)
+    }
+  })
+
+  t.notOk(s.readable)
+  t.notOk(s.writable)
+  t.ok(s.deletable)
+  t.notOk(s.statable)
+
+  assertPromise(s.del(0, 2))
+  assertPromise(s.del(0, 2))
+
+  function assertPromise (promise) {
+    promise.then(function () {
+      // do nothing
+    }).catch(function (err) {
+      t.error(err, 'no error')
+    })
+  }
+})
+
 tape('basic stat', function (t) {
   t.plan(2 * 2 + 4)
 
@@ -95,6 +180,31 @@ tape('basic stat', function (t) {
   function onstat (err, st) {
     t.error(err, 'no error')
     t.same(st, {size: 42})
+  }
+})
+
+tape('basic stat (Promise)', function (t) {
+  t.plan(6)
+
+  var s = ras({
+    stat: function (req) {
+      req.callback(null, {size: 42})
+    }
+  })
+
+  t.notOk(s.readable)
+  t.notOk(s.writable)
+  t.notOk(s.deletable)
+  t.ok(s.statable)
+  assertPromise(s.stat())
+  assertPromise(s.stat())
+
+  function assertPromise (promise) {
+    promise.then(function (st) {
+      t.same(st, {size: 42})
+    }).catch(function (err) {
+      t.error(err, 'no error')
+    })
   }
 })
 
@@ -129,7 +239,7 @@ tape('many open calls only trigger one _open', function (t) {
 })
 
 tape('open errors', function (t) {
-  t.plan(3 + 2)
+  t.plan(3 + 3)
 
   var s = ras({
     open: function (req) {
@@ -145,6 +255,9 @@ tape('open errors', function (t) {
   s.write(0, Buffer.from('hi'), onwrite)
   s.write(0, Buffer.from('hi'), onwrite)
   s.write(0, Buffer.from('hi'), onwrite)
+  s.write(0, Buffer.from('hi')).then(function () {}).catch(function (err) {
+    onwrite(err)
+  })
   s.open() // should try and open again
 
   function onwrite (err) {
@@ -181,7 +294,7 @@ tape('open before read', function (t) {
 })
 
 tape('close', function (t) {
-  t.plan(7)
+  t.plan(8)
 
   var s = ras({
     close: function (req) {
@@ -196,6 +309,9 @@ tape('close', function (t) {
   s.close()
   s.close(function () {
     t.pass('calls the callback')
+  })
+  s.close().then(function () {
+    t.pass('calls the promise')
   })
 
   s.read(0, 10, err => t.same(err, new Error('Closed')))
@@ -224,7 +340,7 @@ tape('close, no open', function (t) {
 })
 
 tape('destroy', function (t) {
-  t.plan(4)
+  t.plan(5)
 
   var s = ras({
     open: req => t.fail('no open'),
@@ -239,6 +355,11 @@ tape('destroy', function (t) {
   s.destroy(function (err) {
     t.error(err, 'no error')
     t.pass('calls the callback')
+  })
+  s.destroy().then(function () {
+    t.pass('calls the callback')
+  }).catch(function (err) {
+    t.error(err, 'no error')
   })
 })
 
