@@ -437,7 +437,7 @@ tape('open error forwarded to dependents', function (t) {
   })
 })
 
-tape('reaopen on read', function (t) {
+tape('reopen on read', function (t) {
   var ondataN = 4
   var readN = 1
   var openN = 1
@@ -549,4 +549,26 @@ tape('reaopen on read, after close is done', function (t) {
     t.ok(s.opened, 'opened property set')
     t.same(data, Buffer.from('hi'), 'read expected data')
   }
+})
+
+tape('close immediately', function (t) {
+  t.plan(11)
+
+  var closed = false
+  var s = ras({
+    read (req) {
+      setImmediate(function () {
+        t.ok(!closed)
+        req.callback(null, Buffer.alloc(1))
+      })
+    },
+    close (req) {
+      closed = true
+      t.pass('closed')
+      req.callback()
+    }
+  })
+
+  for (var i = 0; i < 10; i++) s.read(0, 1, () => {})
+  s.close()
 })

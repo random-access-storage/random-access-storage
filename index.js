@@ -7,6 +7,17 @@ var NOT_DELETABLE = defaultImpl(new Error('Not deletable'))
 var NOT_STATABLE = defaultImpl(new Error('Not statable'))
 var NO_OPEN_READABLE = defaultImpl(new Error('No readonly open'))
 
+// NON_BLOCKING_OPS
+var READ_OP = 0
+var WRITE_OP = 1
+var DEL_OP = 2
+var STAT_OP = 3
+
+// BLOCKING_OPS
+var OPEN_OP = 4
+var CLOSE_OP = 5
+var DESTROY_OP = 6
+
 module.exports = RandomAccess
 
 function RandomAccess (opts) {
@@ -49,7 +60,7 @@ inherits(RandomAccess, events.EventEmitter)
 // do not need get queued unless blocking operation is pending. If blocking
 // operation is pending then they get scheduled to run after.
 RandomAccess.prototype.read = function (offset, size, cb) {
-  this.run(new Request(this, 0, offset, size, null, cb))
+  this.run(new Request(this, READ_OP, offset, size, null, cb))
 }
 
 RandomAccess.prototype._read = NOT_READABLE
@@ -57,7 +68,7 @@ RandomAccess.prototype._read = NOT_READABLE
 RandomAccess.prototype.write = function (offset, data, cb) {
   if (!cb) cb = noop
   openWritable(this)
-  this.run(new Request(this, 1, offset, data.length, data, cb))
+  this.run(new Request(this, WRITE_OP, offset, data.length, data, cb))
 }
 
 RandomAccess.prototype._write = NOT_WRITABLE
@@ -65,13 +76,13 @@ RandomAccess.prototype._write = NOT_WRITABLE
 RandomAccess.prototype.del = function (offset, size, cb) {
   if (!cb) cb = noop
   openWritable(this)
-  this.run(new Request(this, 2, offset, size, null, cb))
+  this.run(new Request(this, DEL_OP, offset, size, null, cb))
 }
 
 RandomAccess.prototype._del = NOT_DELETABLE
 
 RandomAccess.prototype.stat = function (cb) {
-  this.run(new Request(this, 3, 0, 0, null, cb))
+  this.run(new Request(this, STAT_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._stat = NOT_STATABLE
@@ -86,7 +97,7 @@ RandomAccess.prototype._stat = NOT_STATABLE
 RandomAccess.prototype.open = function (cb) {
   if (!cb) cb = noop
   if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
-  queueAndRun(this, new Request(this, 4, 0, 0, null, cb))
+  queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._open = defaultImpl(null)
@@ -97,7 +108,7 @@ RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
 RandomAccess.prototype.close = function (cb) {
   if (!cb) cb = noop
   if (this.closed) return process.nextTick(cb, null)
-  queueAndRun(this, new Request(this, 5, 0, 0, null, cb))
+  queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._close = defaultImpl(null)
@@ -107,7 +118,7 @@ RandomAccess.prototype._close = defaultImpl(null)
 RandomAccess.prototype.destroy = function (cb) {
   if (!cb) cb = noop
   if (!this.closed) this.close(noop)
-  queueAndRun(this, new Request(this, 6, 0, 0, null, cb))
+  queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, cb))
 }
 
 RandomAccess.prototype._destroy = defaultImpl(null)
@@ -137,7 +148,7 @@ function Request (self, type, offset, size, data, cb) {
 }
 
 Request.prototype._maybeOpenError = function (err) {
-  if (this.type !== 4) return
+  if (this.type !== OPEN_OP) return
   var queued = this.storage._queued
   for (var i = 0; i < queued.length; i++) queued[i]._openError = err
 }
@@ -148,7 +159,7 @@ Request.prototype._unqueue = function (err) {
 
   if (!err) {
     switch (this.type) {
-      case 4:
+      case OPEN_OP:
         if (!ra.opened) {
           ra.opened = true
           ra.closed = false
@@ -156,7 +167,7 @@ Request.prototype._unqueue = function (err) {
         }
         break
 
-      case 5:
+      case CLOSE_OP:
         if (!ra.closed) {
           ra.closed = true
           ra.opened = false
@@ -164,7 +175,7 @@ Request.prototype._unqueue = function (err) {
         }
         break
 
-      case 6:
+      case DESTROY_OP:
         if (!ra.destroyed) {
           ra.destroyed = true
           ra.emit('destroy')
@@ -215,32 +226,32 @@ Request.prototype._run = function () {
   this._sync = true
 
   switch (this.type) {
-    case 0:
+    case READ_OP:
       if (this._openAndNotClosed()) ra._read(this)
       break
 
-    case 1:
+    case WRITE_OP:
       if (this._openAndNotClosed()) ra._write(this)
       break
 
-    case 2:
+    case DEL_OP:
       if (this._openAndNotClosed()) ra._del(this)
       break
 
-    case 3:
+    case STAT_OP:
       if (this._openAndNotClosed()) ra._stat(this)
       break
 
-    case 4:
+    case OPEN_OP:
       this._open()
       break
 
-    case 5:
+    case CLOSE_OP:
       if (ra.closed || !ra.opened) nextTick(this, null)
       else ra._close(this)
       break
 
-    case 6:
+    case DESTROY_OP:
       if (ra.destroyed) nextTick(this, null)
       else ra._destroy(this)
       break
@@ -267,8 +278,9 @@ function drainQueue (self) {
   }
 
   while (queued.length > 0) {
-    queued[0]._run()
-    if (queued[0].type > 3) return // all >3 types are blocking
+    var blocking = queued[0].type > 3
+    if (!blocking || !self._pending) queued[0]._run()
+    if (blocking) return
     queued.shift()
   }
 }
