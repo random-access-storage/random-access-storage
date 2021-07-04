@@ -19,19 +19,13 @@ This module exposes a base class that implements most of the plumbing and flow y
 ## Usage
 
 ``` js
-var randomAccess = require('random-access-storage')
-var fs = require('fs')
-
-var file = fileReader('index.js')
-
-file.read(0, 10, (err, buf) => console.log('0-10: ' + buf.toString()))
-file.read(40, 15, (err, buf) => console.log('40-55: ' + buf.toString()))
-file.close()
+import fs from 'node:fs'
+import RandomAccess from 'random-access-storage'
 
 function fileReader (name) {
-  var fd = 0
-  return randomAccess({
-    open: function (req) {
+  let fd = 0
+  return new RandomAccess({
+    open (req) {
       // called once automatically before the first read call
       fs.open(name, 'r', function (err, res) {
         if (err) return req.callback(err)
@@ -39,7 +33,7 @@ function fileReader (name) {
         req.callback(null)
       })
     },
-    read: function (req) {
+    read (req) {
       var buf = Buffer.allocUnsafe(req.size)
       fs.read(fd, buf, 0, buf.length, req.offset, function (err, read) {
         if (err) return req.callback(err)
@@ -47,12 +41,18 @@ function fileReader (name) {
         req.callback(null, buf)
       })
     },
-    close: function (req) {
+    close (req) {
       if (!fd) return req.callback(null)
       fs.close(fd, err => req.callback(err))
     }
   })
 }
+
+const file = fileReader('index.js')
+
+file.read(0, 10, (err, buf) => console.log('0-10: ' + buf.toString()))
+file.read(40, 15, (err, buf) => console.log('40-55: ' + buf.toString()))
+file.close()
 ```
 
 ## API
