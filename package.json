@@ -4,7 +4,8 @@
   "description": "Easily make random-access-storage instances",
   "main": "index.js",
   "dependencies": {
-    "inherits": "^2.0.3"
+    "inherits": "^2.0.3",
+    "queue-tick": "^1.0.0"
   },
   "devDependencies": {
     "standard": "^10.0.3",

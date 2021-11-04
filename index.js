@@ -1,5 +1,6 @@
 var events = require('events')
 var inherits = require('inherits')
+var queueTick = require('queue-tick')
 
 var NOT_READABLE = defaultImpl(new Error('Not readable'))
 var NOT_WRITABLE = defaultImpl(new Error('Not writable'))
@@ -82,7 +83,7 @@ RandomAccess.prototype._stat = NOT_STATABLE
 
 RandomAccess.prototype.open = function (cb) {
   if (!cb) cb = noop
-  if (this.opened && !this._needsOpen) return process.nextTick(cb, null)
+  if (this.opened && !this._needsOpen) return queueTick(() => cb(null))
   queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, cb))
 }
 
@@ -91,7 +92,7 @@ RandomAccess.prototype._openReadonly = NO_OPEN_READABLE
 
 RandomAccess.prototype.close = function (cb) {
   if (!cb) cb = noop
-  if (this.closed) return process.nextTick(cb, null)
+  if (this.closed) return queueTick(() => cb(null))
   queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, cb))
 }
 
@@ -265,9 +266,5 @@ function defaultImpl (err) {
 }
 
 function nextTick (req, err, val) {
-  process.nextTick(nextTickCallback, req, err, val)
-}
-
-function nextTickCallback (req, err, val) {
-  req.callback(err, val)
+  queueTick(() => req.callback(err, val))
 }
