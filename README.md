@@ -6,8 +6,6 @@ Easily make random-access-storage instances
 npm install random-access-storage
 ```
 
-[![build status](https://travis-ci.org/random-access-storage/random-access-storage.svg?branch=master)](https://travis-ci.org/random-access-storage/random-access-storage)
-
 A random-access-storage instance is a common interface for a storage abstraction, that provides the following core api.
 
 * `read(offset, size)` - Read a buffer at a custom offset.
