@@ -4,6 +4,7 @@
   "description": "Easily make random-access-storage instances",
   "main": "index.js",
   "dependencies": {
+    "events": "^3.3.0",
     "inherits": "^2.0.3",
     "queue-tick": "^1.0.0"
   },
