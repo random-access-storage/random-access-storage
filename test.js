@@ -1,117 +1,116 @@
-var tape = require('tape')
-var ras = require('./')
+const test = require('brittle')
+const RAS = require('.')
 
-tape('basic read', function (t) {
+test('basic read', function (t) {
   t.plan(2 * 4 + 4)
 
-  var expected = [Buffer.from('hi'), Buffer.from('ho')]
-  var queued = expected.slice(0)
-  var s = ras({
+  const expected = [Buffer.from('hi'), Buffer.from('ho')]
+  const queued = expected.slice(0)
+  const s = new RAS({
     read: function (req) {
       process.nextTick(function () {
-        t.same(req.offset, 0)
-        t.same(req.size, 2)
+        t.alike(req.offset, 0)
+        t.alike(req.size, 2)
         req.callback(null, queued.shift())
       })
     }
   })
 
   t.ok(s.readable)
-  t.notOk(s.writable)
-  t.notOk(s.deletable)
-  t.notOk(s.statable)
+  t.absent(s.writable)
+  t.absent(s.deletable)
+  t.absent(s.statable)
   s.read(0, 2, ondata)
   s.read(0, 2, ondata)
 
   function ondata (err, data) {
-    t.error(err, 'no error')
-    t.same(data, expected.shift())
+    t.absent(err, 'no error')
+    t.alike(data, expected.shift())
   }
 })
 
-tape('basic write', function (t) {
+test('basic write', function (t) {
   t.plan(2 * 2 + 4)
 
-  var expected = [Buffer.from('hi'), Buffer.from('ho')]
-  var s = ras({
+  const expected = [Buffer.from('hi'), Buffer.from('ho')]
+  const s = new RAS({
     write: function (req) {
-      t.same(req.data, expected.shift())
+      t.alike(req.data, expected.shift())
       req.callback(null)
     }
   })
 
-  t.notOk(s.readable)
+  t.absent(s.readable)
   t.ok(s.writable)
-  t.notOk(s.deletable)
-  t.notOk(s.statable)
+  t.absent(s.deletable)
+  t.absent(s.statable)
   s.write(0, Buffer.from('hi'), onwrite)
   s.write(0, Buffer.from('ho'), onwrite)
 
   function onwrite (err, write) {
-    t.error(err, 'no error')
+    t.absent(err, 'no error')
   }
 })
 
-tape('basic del', function (t) {
+test('basic del', function (t) {
   t.plan(2 + 2 * 3 + 4)
 
-  var s = ras({
+  const s = new RAS({
     del: function (req) {
-      t.same(req.offset, 0)
-      t.same(req.size, 2)
+      t.alike(req.offset, 0)
+      t.alike(req.size, 2)
       req.callback(null)
     }
   })
 
-  t.notOk(s.readable)
-  t.notOk(s.writable)
+  t.absent(s.readable)
+  t.absent(s.writable)
   t.ok(s.deletable)
-  t.notOk(s.statable)
+  t.absent(s.statable)
   s.del(0, 2, ondelete)
   s.del(0, 2, ondelete)
   s.del(0, 2) // cb is optional
 
   function ondelete (err) {
-    t.error(err, 'no error')
+    t.absent(err, 'no error')
   }
 })
 
-tape('basic stat', function (t) {
+test('basic stat', function (t) {
   t.plan(2 * 2 + 4)
 
-  var s = ras({
+  const s = new RAS({
     stat: function (req) {
-      req.callback(null, {size: 42})
+      req.callback(null, { size: 42 })
     }
   })
 
-  t.notOk(s.readable)
-  t.notOk(s.writable)
-  t.notOk(s.deletable)
+  t.absent(s.readable)
+  t.absent(s.writable)
+  t.absent(s.deletable)
   t.ok(s.statable)
   s.stat(onstat)
   s.stat(onstat)
 
   function onstat (err, st) {
-    t.error(err, 'no error')
-    t.same(st, {size: 42})
+    t.absent(err, 'no error')
+    t.alike(st, { size: 42 })
   }
 })
 
-tape('no opts', function (t) {
-  var s = ras()
+test('no opts', function (t) {
+  const s = new RAS()
 
-  t.notOk(s.readable)
-  t.notOk(s.writable)
-  t.notOk(s.deletable)
-  t.notOk(s.statable)
-  t.end()
+  t.absent(s.readable)
+  t.absent(s.writable)
+  t.absent(s.deletable)
+  t.absent(s.statable)
 })
 
-tape('many open calls only trigger one _open', function (t) {
+test('many open calls only trigger one _open', function (t) {
   t.plan(1)
 
-  var s = ras({
+  const s = new RAS({
     open: function (req) {
       process.nextTick(function () {
         t.pass('is opening')
@@ -128,10 +127,10 @@ tape('many open calls only trigger one _open', function (t) {
   setImmediate(() => s.open())
 })
 
-tape('open errors', function (t) {
+test('open errors', function (t) {
   t.plan(3 + 2)
 
-  var s = ras({
+  const s = new RAS({
     open: function (req) {
       t.pass('in open')
       setImmediate(() => req.callback(new Error('nope')))
@@ -148,15 +147,15 @@ tape('open errors', function (t) {
   s.open() // should try and open again
 
   function onwrite (err) {
-    t.same(err, new Error('Not opened'))
+    t.alike(err, new Error('nope'))
   }
 })
 
-tape('open before read', function (t) {
+test('open before read', function (t) {
   t.plan(5 * 2 + 1 + 1)
 
-  var open = false
-  var s = ras({
+  let open = false
+  const s = new RAS({
     open: function (req) {
       t.ok(!open, 'only open once')
       open = true
@@ -168,22 +167,22 @@ tape('open before read', function (t) {
     }
   })
 
-  t.notOk(s.opened, 'opened property not set')
+  t.absent(s.opened, 'opened property not set')
   s.read(0, 2, ondata)
   s.read(0, 2, ondata)
 
   function ondata (err, data) {
-    t.error(err, 'no error')
+    t.absent(err, 'no error')
     t.ok(open, 'is open')
     t.ok(s.opened, 'opened property set')
-    t.same(data, Buffer.from('hi'))
+    t.alike(data, Buffer.from('hi'))
   }
 })
 
-tape('close', function (t) {
+test('close', function (t) {
   t.plan(7)
 
-  var s = ras({
+  const s = new RAS({
     close: function (req) {
       t.pass('closing')
       req.callback(null)
@@ -198,16 +197,16 @@ tape('close', function (t) {
     t.pass('calls the callback')
   })
 
-  s.read(0, 10, err => t.same(err, new Error('Closed')))
-  s.stat(err => t.same(err, new Error('Closed')))
-  s.write(0, Buffer.from('hi'), err => t.same(err, new Error('Closed')))
-  s.del(0, 10, err => t.same(err, new Error('Closed')))
+  s.read(0, 10, err => t.alike(err, new Error('Closed')))
+  s.stat(err => t.alike(err, new Error('Closed')))
+  s.write(0, Buffer.from('hi'), err => t.alike(err, new Error('Closed')))
+  s.del(0, 10, err => t.alike(err, new Error('Closed')))
 })
 
-tape('close, no open', function (t) {
+test('close, no open', function (t) {
   t.plan(5)
 
-  var s = ras({
+  const s = new RAS({
     close: req => t.fail('only close if open')
   })
 
@@ -217,16 +216,16 @@ tape('close, no open', function (t) {
     t.pass('calls the callback')
   })
 
-  s.read(0, 10, err => t.same(err, new Error('Closed')))
-  s.stat(err => t.same(err, new Error('Closed')))
-  s.write(0, Buffer.from('hi'), err => t.same(err, new Error('Closed')))
-  s.del(0, 10, err => t.same(err, new Error('Closed')))
+  s.read(0, 10, err => t.alike(err, new Error('Closed')))
+  s.stat(err => t.alike(err, new Error('Closed')))
+  s.write(0, Buffer.from('hi'), err => t.alike(err, new Error('Closed')))
+  s.del(0, 10, err => t.alike(err, new Error('Closed')))
 })
 
-tape('destroy', function (t) {
+test('destroy', function (t) {
   t.plan(4)
 
-  var s = ras({
+  const s = new RAS({
     open: req => t.fail('no open'),
     destroy: function (req) {
       t.pass('destroying')
@@ -237,15 +236,15 @@ tape('destroy', function (t) {
   s.on('destroy', () => t.pass('destroy emitted'))
   s.destroy()
   s.destroy(function (err) {
-    t.error(err, 'no error')
+    t.absent(err, 'no error')
     t.pass('calls the callback')
   })
 })
 
-tape('destroy closes first', function (t) {
+test('destroy closes first', function (t) {
   t.plan(2)
 
-  var s = ras({
+  const s = new RAS({
     close: function (req) {
       t.pass('closing')
       req.callback(null)
@@ -260,10 +259,10 @@ tape('destroy closes first', function (t) {
   s.destroy()
 })
 
-tape('destroy with explicit close first', function (t) {
+test('destroy with explicit close first', function (t) {
   t.plan(2)
 
-  var s = ras({
+  const s = new RAS({
     close: function (req) {
       t.pass('closing')
       req.callback(null)
@@ -279,10 +278,10 @@ tape('destroy with explicit close first', function (t) {
   s.destroy()
 })
 
-tape('open and close', function (t) {
+test('open and close', function (t) {
   t.plan(7)
 
-  var s = ras({
+  const s = new RAS({
     open: function (req) {
       t.pass('opening')
       req.callback(null)
@@ -300,17 +299,17 @@ tape('open and close', function (t) {
     t.pass('calls the callback')
   })
 
-  s.read(0, 10, err => t.same(err, new Error('Closed')))
-  s.stat(err => t.same(err, new Error('Closed')))
-  s.write(0, Buffer.from('hi'), err => t.same(err, new Error('Closed')))
-  s.del(0, 10, err => t.same(err, new Error('Closed')))
+  s.read(0, 10, err => t.alike(err, new Error('Closed')))
+  s.stat(err => t.alike(err, new Error('Closed')))
+  s.write(0, Buffer.from('hi'), err => t.alike(err, new Error('Closed')))
+  s.del(0, 10, err => t.alike(err, new Error('Closed')))
 })
 
-tape('write and close', function (t) {
+test('write and close', function (t) {
   t.plan(1 + 5 + 1 + 3)
 
-  var closed = false
-  var s = ras({
+  let closed = false
+  const s = new RAS({
     open: function (req) {
       t.pass('opened')
       req.callback(null)
@@ -322,7 +321,7 @@ tape('write and close', function (t) {
       })
     },
     close: function (req) {
-      t.notOk(closed, 'not closed yet')
+      t.absent(closed, 'not closed yet')
       closed = true
       req.callback(null)
     }
@@ -333,15 +332,15 @@ tape('write and close', function (t) {
   s.write(0, Buffer.from('hi'))
   s.write(0, Buffer.from('hi'))
   s.write(0, Buffer.from('hi'))
-  s.close(err => t.error(err, 'no error'))
-  s.close(err => t.error(err, 'no error'))
-  s.close(err => t.error(err, 'no error'))
+  s.close(err => t.absent(err, 'no error'))
+  s.close(err => t.absent(err, 'no error'))
+  s.close(err => t.absent(err, 'no error'))
 })
 
-tape('open readonly', function (t) {
+test('open readonly', function (t) {
   t.plan(2)
 
-  var s = ras({
+  const s = new RAS({
     open: () => t.fail('no open'),
     openReadonly: function (req) {
       t.pass('open readonly')
@@ -351,17 +350,17 @@ tape('open readonly', function (t) {
   })
 
   s.open()
-  s.read(0, 10, err => t.error(err, 'no error'))
+  s.read(0, 10, err => t.absent(err, 'no error'))
 })
 
-tape('open readonly and then write', function (t) {
+test('open readonly and then write', function (t) {
   t.plan(4)
 
-  var readonlyFirst = true
+  let readonlyFirst = true
 
-  var s = ras({
+  const s = new RAS({
     open: function (req) {
-      t.notOk(readonlyFirst, 'open readonly first')
+      t.absent(readonlyFirst, 'open readonly first')
       req.callback(null)
     },
     openReadonly: function (req) {
@@ -374,14 +373,14 @@ tape('open readonly and then write', function (t) {
   })
 
   s.open()
-  s.read(0, 2, err => t.error(err, 'no error'))
-  s.write(0, Buffer.from('hi'), err => t.error(err, 'no error'))
+  s.read(0, 2, err => t.absent(err, 'no error'))
+  s.write(0, Buffer.from('hi'), err => t.absent(err, 'no error'))
 })
 
-tape('open readonly ignored when first op is write', function (t) {
+test('open readonly ignored when first op is write', function (t) {
   t.plan(3)
 
-  var s = ras({
+  const s = new RAS({
     open: function (req) {
       t.pass('should open')
       req.callback(null)
@@ -391,31 +390,34 @@ tape('open readonly ignored when first op is write', function (t) {
     write: req => req.callback(null)
   })
 
-  s.write(0, Buffer.from('hi'), err => t.error(err, 'no error'))
-  s.read(0, 2, err => t.error(err, 'no error'))
+  s.write(0, Buffer.from('hi'), err => t.absent(err, 'no error'))
+  s.read(0, 2, err => t.absent(err, 'no error'))
 })
 
-tape('always async', function (t) {
-  var s = ras({
+test('always async', function (t) {
+  t.plan(3)
+
+  const s = new RAS({
     read: req => req.callback(null, Buffer.from('hi'))
   })
 
   s.open(function () {
-    var sync = true
+    let sync = true
 
     s.read(0, 2, function (err, buf) {
-      t.error(err, 'no error')
-      t.same(buf, Buffer.from('hi'))
-      t.notOk(sync)
-      t.end()
+      t.absent(err, 'no error')
+      t.alike(buf, Buffer.from('hi'))
+      t.absent(sync)
     })
 
     sync = false
   })
 })
 
-tape('open error forwarded to dependents', function (t) {
-  var s = ras({
+test('open error forwarded to dependents', function (t) {
+  t.plan(5)
+
+  const s = new RAS({
     open: req => req.callback(new Error('Nope')),
     read: req => req.callback(null, Buffer.from('hi')),
     write: req => req.callback(null, null)
@@ -423,25 +425,24 @@ tape('open error forwarded to dependents', function (t) {
 
   s.write(0, Buffer.from('hi'), function (err) {
     t.ok(err)
-    t.same(err.message, 'Nope')
+    t.alike(err.message, 'Nope')
   })
 
   s.read(0, 2, function (err) {
     t.ok(err)
-    t.same(err.message, 'Nope')
+    t.alike(err.message, 'Nope')
   })
 
   s.close(function (err) {
     t.ok(!err)
-    t.end()
   })
 })
 
-tape('close immediately', function (t) {
+test('close immediately', function (t) {
   t.plan(11)
 
-  var closed = false
-  var s = ras({
+  let closed = false
+  const s = new RAS({
     read (req) {
       setImmediate(function () {
         t.ok(!closed)
@@ -455,6 +456,6 @@ tape('close immediately', function (t) {
     }
   })
 
-  for (var i = 0; i < 10; i++) s.read(0, 1, () => {})
+  for (let i = 0; i < 10; i++) s.read(0, 1, () => {})
   s.close()
 })

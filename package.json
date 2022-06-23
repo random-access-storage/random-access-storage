@@ -5,15 +5,14 @@
   "main": "index.js",
   "dependencies": {
     "events": "^3.3.0",
-    "inherits": "^2.0.3",
     "queue-tick": "^1.0.0"
   },
   "devDependencies": {
-    "standard": "^10.0.3",
-    "tape": "^4.8.0"
+    "brittle": "^2.3.1",
+    "standard": "^17.0.0"
   },
   "scripts": {
-    "test": "standard && tape test.js"
+    "test": "standard && brittle test.js"
   },
   "repository": {
     "type": "git",
