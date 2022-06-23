@@ -337,13 +337,12 @@ test('write and close', function (t) {
   s.close(err => t.absent(err, 'no error'))
 })
 
-test('open readonly', function (t) {
+test('open and read', function (t) {
   t.plan(2)
 
   const s = new RAS({
-    open: () => t.fail('no open'),
-    openReadonly: function (req) {
-      t.pass('open readonly')
+    open: function (req) {
+      t.not(req.create, 'no create')
       req.callback(null)
     },
     read: req => req.callback(null, Buffer.from('hi'))
@@ -353,19 +352,17 @@ test('open readonly', function (t) {
   s.read(0, 10, err => t.absent(err, 'no error'))
 })
 
-test('open readonly and then write', function (t) {
+test('open and read then write', function (t) {
   t.plan(4)
 
-  let readonlyFirst = true
+  let first = true
 
   const s = new RAS({
     open: function (req) {
-      t.absent(readonlyFirst, 'open readonly first')
-      req.callback(null)
-    },
-    openReadonly: function (req) {
-      t.ok(readonlyFirst, 'open readonly first')
-      readonlyFirst = false
+      if (first) t.not(req.create, 'no create')
+      else t.ok(req.create, 'create')
+
+      first = false
       req.callback(null)
     },
     read: req => req.callback(null, Buffer.from('hi')),
@@ -377,15 +374,14 @@ test('open readonly and then write', function (t) {
   s.write(0, Buffer.from('hi'), err => t.absent(err, 'no error'))
 })
 
-test('open readonly ignored when first op is write', function (t) {
+test('open and write', function (t) {
   t.plan(3)
 
   const s = new RAS({
     open: function (req) {
-      t.pass('should open')
+      t.ok(req.create, 'create')
       req.callback(null)
     },
-    openReadonly: req => t.fail('first op is a write'),
     read: req => req.callback(null, Buffer.from('hi')),
     write: req => req.callback(null)
   })

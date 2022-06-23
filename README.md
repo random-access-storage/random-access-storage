@@ -121,23 +121,13 @@ It is safe to call this more than once.
 
 Triggers *one* call to `_open` if you implement that.
 
-If you implement `_openReadonly` and the operation that triggers the open
-is not a write/del then `_openReadonly` will be called instead.
-
-If a write is later performed a `_open` call will be triggered as well,
-expecting you to open the storage in read/write mode.
-
 #### `storage._open(req)`
 
 Implement storage open.
 
+* `req.create` is `true` if the storage should be created.
+
 Call `req.callback` when it is fully opened.
-
-#### `storage._openReadonly(req)`
-
-Implement storage readonly open.
-
-Useful if you prefer to open the storage in readonly mode unless a write is performed. Call `req.callback` when it is fully opened.
 
 #### `storage.read(offset, size, callback)`
 

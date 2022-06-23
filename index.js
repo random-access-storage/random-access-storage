@@ -5,7 +5,6 @@ const NOT_READABLE = defaultImpl(new Error('Not readable'))
 const NOT_WRITABLE = defaultImpl(new Error('Not writable'))
 const NOT_DELETABLE = defaultImpl(new Error('Not deletable'))
 const NOT_STATABLE = defaultImpl(new Error('Not statable'))
-const NO_OPEN_READABLE = defaultImpl(new Error('No readonly open'))
 
 // NON_BLOCKING_OPS
 const READ_OP = 0
@@ -25,12 +24,12 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this._queued = []
     this._pending = 0
     this._needsOpen = true
+    this._needsCreate = false
 
     this.opened = false
     this.closed = false
     this.destroyed = false
 
-    if (opts.openReadonly) this._openReadonly = opts.openReadonly
     if (opts.open) this._open = opts.open
     if (opts.read) this._read = opts.read
     if (opts.write) this._write = opts.write
@@ -39,7 +38,6 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     if (opts.close) this._close = opts.close
     if (opts.destroy) this._destroy = opts.destroy
 
-    this.preferReadonly = this._openReadonly !== NO_OPEN_READABLE
     this.readable = this._read !== NOT_READABLE
     this.writable = this._write !== NOT_WRITABLE
     this.deletable = this._del !== NOT_DELETABLE
@@ -47,7 +45,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   }
 
   read (offset, size, cb) {
-    this.run(new Request(this, READ_OP, offset, size, null, cb))
+    this.run(new Request(this, READ_OP, offset, size, null, false, cb))
   }
 
   _read = NOT_READABLE
@@ -55,7 +53,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   write (offset, data, cb) {
     if (!cb) cb = noop
     openWritable(this)
-    this.run(new Request(this, WRITE_OP, offset, data.length, data, cb))
+    this.run(new Request(this, WRITE_OP, offset, data.length, data, false, cb))
   }
 
   _write = NOT_WRITABLE
@@ -63,13 +61,13 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   del (offset, size, cb) {
     if (!cb) cb = noop
     openWritable(this)
-    this.run(new Request(this, DEL_OP, offset, size, null, cb))
+    this.run(new Request(this, DEL_OP, offset, size, null, false, cb))
   }
 
   _del = NOT_DELETABLE
 
   stat (cb) {
-    this.run(new Request(this, STAT_OP, 0, 0, null, cb))
+    this.run(new Request(this, STAT_OP, 0, 0, null, false, cb))
   }
 
   _stat = NOT_STATABLE
@@ -77,17 +75,15 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   open (cb) {
     if (!cb) cb = noop
     if (this.opened && !this._needsOpen) return queueTick(() => cb(null))
-    queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, cb))
+    queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, this._needsCreate, cb))
   }
 
   _open = defaultImpl(null)
 
-  _openReadonly = NO_OPEN_READABLE
-
   close (cb) {
     if (!cb) cb = noop
     if (this.closed) return queueTick(() => cb(null))
-    queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, cb))
+    queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, false, cb))
   }
 
   _close = defaultImpl(null)
@@ -95,7 +91,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   destroy (cb) {
     if (!cb) cb = noop
     if (!this.closed) this.close(noop)
-    queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, cb))
+    queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, false, cb))
   }
 
   _destroy = defaultImpl(null)
@@ -110,11 +106,12 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 function noop () {}
 
 class Request {
-  constructor (self, type, offset, size, data, cb) {
+  constructor (self, type, offset, size, data, create, cb) {
     this.type = type
     this.offset = offset
-    this.data = data
     this.size = size
+    this.data = data
+    this.create = create
     this.storage = self
 
     this._sync = false
@@ -185,8 +182,7 @@ class Request {
     if (ra.closed) return nextTick(this, new Error('Closed'))
 
     ra._needsOpen = false
-    if (ra.preferReadonly) ra._openReadonly(this)
-    else ra._open(this)
+    ra._open(this)
   }
 
   _run () {
@@ -248,9 +244,9 @@ function drainQueue (self) {
 }
 
 function openWritable (self) {
-  if (self.preferReadonly) {
+  if (!self._needsCreate) {
     self._needsOpen = true
-    self.preferReadonly = false
+    self._needsCreate = true
   }
 }
 
