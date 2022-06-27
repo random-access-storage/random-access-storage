@@ -6,6 +6,10 @@ const NOT_WRITABLE = defaultImpl(new Error('Not writable'))
 const NOT_DELETABLE = defaultImpl(new Error('Not deletable'))
 const NOT_STATABLE = defaultImpl(new Error('Not statable'))
 
+const DEFAULT_OPEN = defaultImpl(null)
+const DEFAULT_CLOSE = defaultImpl(null)
+const DEFAULT_DESTROY = defaultImpl(null)
+
 // NON_BLOCKING_OPS
 const READ_OP = 0
 const WRITE_OP = 1
@@ -38,17 +42,19 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     if (opts.close) this._close = opts.close
     if (opts.destroy) this._destroy = opts.destroy
 
-    this.readable = this._read !== NOT_READABLE
-    this.writable = this._write !== NOT_WRITABLE
-    this.deletable = this._del !== NOT_DELETABLE
-    this.statable = this._stat !== NOT_STATABLE
+    this.readable = this._read !== RandomAccessStorage.prototype._read
+    this.writable = this._write !== RandomAccessStorage.prototype._write
+    this.deletable = this._del !== RandomAccessStorage.prototype._del
+    this.statable = this._stat !== RandomAccessStorage.prototype._stat
   }
 
   read (offset, size, cb) {
     this.run(new Request(this, READ_OP, offset, size, null, false, cb))
   }
 
-  _read = NOT_READABLE
+  _read (req) {
+    return NOT_READABLE(req)
+  }
 
   write (offset, data, cb) {
     if (!cb) cb = noop
@@ -56,7 +62,9 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this.run(new Request(this, WRITE_OP, offset, data.length, data, false, cb))
   }
 
-  _write = NOT_WRITABLE
+  _write (req) {
+    return NOT_WRITABLE(req)
+  }
 
   del (offset, size, cb) {
     if (!cb) cb = noop
@@ -64,13 +72,17 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this.run(new Request(this, DEL_OP, offset, size, null, false, cb))
   }
 
-  _del = NOT_DELETABLE
+  _del (req) {
+    return NOT_DELETABLE(req)
+  }
 
   stat (cb) {
     this.run(new Request(this, STAT_OP, 0, 0, null, false, cb))
   }
 
-  _stat = NOT_STATABLE
+  _stat (req) {
+    return NOT_STATABLE(req)
+  }
 
   open (cb) {
     if (!cb) cb = noop
@@ -78,7 +90,9 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, this._needsCreate, cb))
   }
 
-  _open = defaultImpl(null)
+  _open (req) {
+    return DEFAULT_OPEN(req)
+  }
 
   close (cb) {
     if (!cb) cb = noop
@@ -86,7 +100,9 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, false, cb))
   }
 
-  _close = defaultImpl(null)
+  _close (req) {
+    return DEFAULT_CLOSE(req)
+  }
 
   destroy (cb) {
     if (!cb) cb = noop
@@ -94,7 +110,9 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, false, cb))
   }
 
-  _destroy = defaultImpl(null)
+  _destroy (req) {
+    return DEFAULT_DESTROY(req)
+  }
 
   run (req) {
     if (this._needsOpen) this.open(noop)
