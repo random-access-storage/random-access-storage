@@ -455,3 +455,30 @@ test('close immediately', function (t) {
   for (let i = 0; i < 10; i++) s.read(0, 1, () => {})
   s.close()
 })
+
+test('class extend', function (t) {
+  class C extends RAS {
+    _read (req) {
+      req.callback(null)
+    }
+
+    _write (req) {
+      req.callback(null)
+    }
+
+    _del (req) {
+      req.callback(null)
+    }
+
+    _stat (req) {
+      req.callback(null)
+    }
+  }
+
+  const c = new C()
+
+  t.ok(c.readable)
+  t.ok(c.writable)
+  t.ok(c.deletable)
+  t.ok(c.statable)
+})
