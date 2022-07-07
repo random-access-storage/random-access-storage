@@ -28,7 +28,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this._queued = []
     this._pending = 0
     this._needsOpen = true
-    this._needsCreate = false
+    this._needsCreate = !!opts.createAlways
 
     this.opened = false
     this.closed = false
