@@ -482,3 +482,18 @@ test('class extend', function (t) {
   t.ok(c.deletable)
   t.ok(c.statable)
 })
+
+test('create always', function (t) {
+  t.plan(1)
+
+  const s = new RAS({
+    createAlways: true,
+
+    open: function (req) {
+      t.ok(req.create)
+      req.callback(null)
+    }
+  })
+
+  s.open()
+})
