@@ -61,8 +61,8 @@ Make a new instance. Options include:
 
 ``` js
 {
+  createAlways: false, // always create storage on first open
   open: fn, // sets ._open
-  openReadonly: fn, // sets ._openReadonly
   read: fn, // sets ._read
   write: fn, // sets ._write
   del: fn, // sets ._del
