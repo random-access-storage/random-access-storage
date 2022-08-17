@@ -66,6 +66,7 @@ Make a new instance. Options include:
   read: fn, // sets ._read
   write: fn, // sets ._write
   del: fn, // sets ._del
+  truncate: fn, // sets ._truncate
   stat: fn, // sets ._stat
   close: fn, // sets ._close
   destroy: fn // sets ._destroy
@@ -83,6 +84,10 @@ True if the storage implements `._write`.
 #### `storage.deletable`
 
 True if the storage implements `._del`.
+
+#### `storage.truncatable`
+
+True if the storage implements `._truncate`.
 
 #### `storage.statable`
 
@@ -162,7 +167,7 @@ Note that this is guaranteed to run after the storage has been opened and not af
 
 #### `storage.del(offset, size, [callback])`
 
-Delete the specified amount of bytes as the specified offset. Optionally pass a callback that is called with `(err)` when the delete has completed.
+Delete the specified amount of bytes at the specified offset. Optionally pass a callback that is called with `(err)` when the delete has completed.
 
 #### `storage._del(req)`
 
@@ -172,6 +177,20 @@ Implement storage delete.
 * `req.size` contains the amount of bytes to delete.
 
 Call `req.callback(err)` when the delete has completed.
+
+Note that this is guaranteed to run after the storage has been opened and not after it has been closed.
+
+#### `storage.truncate(offset, [callback])`
+
+Truncate the storage at the specified offset. Optionally pass a callback that is called with `(err)` when the truncate has completed.
+
+#### `storage._truncate(req)`
+
+Implement storage truncate. Defaults to `storage._del(req)`.
+
+* `req.offset` contains the byte offset to truncate at.
+
+Call `req.callback(err)` when the truncate has completed.
 
 Note that this is guaranteed to run after the storage has been opened and not after it has been closed.
 
