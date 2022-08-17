@@ -14,12 +14,13 @@ const DEFAULT_DESTROY = defaultImpl(null)
 const READ_OP = 0
 const WRITE_OP = 1
 const DEL_OP = 2
-const STAT_OP = 3
+const TRUNCATE_OP = 3
+const STAT_OP = 4
 
 // BLOCKING_OPS
-const OPEN_OP = 4
-const CLOSE_OP = 5
-const DESTROY_OP = 6
+const OPEN_OP = 5
+const CLOSE_OP = 6
+const DESTROY_OP = 7
 
 module.exports = class RandomAccessStorage extends EventEmitter {
   constructor (opts = {}) {
@@ -38,6 +39,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     if (opts.read) this._read = opts.read
     if (opts.write) this._write = opts.write
     if (opts.del) this._del = opts.del
+    if (opts.truncate) this._truncate = opts.truncate
     if (opts.stat) this._stat = opts.stat
     if (opts.close) this._close = opts.close
     if (opts.destroy) this._destroy = opts.destroy
@@ -45,6 +47,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this.readable = this._read !== RandomAccessStorage.prototype._read
     this.writable = this._write !== RandomAccessStorage.prototype._write
     this.deletable = this._del !== RandomAccessStorage.prototype._del
+    this.truncatable = this._truncate !== RandomAccessStorage.prototype._truncate || this.deletable
     this.statable = this._stat !== RandomAccessStorage.prototype._stat
   }
 
@@ -74,6 +77,16 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 
   _del (req) {
     return NOT_DELETABLE(req)
+  }
+
+  truncate (offset, cb) {
+    if (!cb) cb = noop
+    openWritable(this)
+    this.run(new Request(this, TRUNCATE_OP, offset, Infinity, null, false, cb))
+  }
+
+  _truncate (req) {
+    this._del(req)
   }
 
   stat (cb) {
@@ -220,6 +233,10 @@ class Request {
 
       case DEL_OP:
         if (this._openAndNotClosed()) ra._del(this)
+        break
+
+      case TRUNCATE_OP:
+        if (this._openAndNotClosed()) ra._truncate(this)
         break
 
       case STAT_OP:

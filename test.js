@@ -2,15 +2,15 @@ const test = require('brittle')
 const RAS = require('.')
 
 test('basic read', function (t) {
-  t.plan(2 * 4 + 4)
+  t.plan(2 * 4 + 5)
 
   const expected = [Buffer.from('hi'), Buffer.from('ho')]
   const queued = expected.slice(0)
   const s = new RAS({
     read: function (req) {
       process.nextTick(function () {
-        t.alike(req.offset, 0)
-        t.alike(req.size, 2)
+        t.is(req.offset, 0)
+        t.is(req.size, 2)
         req.callback(null, queued.shift())
       })
     }
@@ -19,6 +19,7 @@ test('basic read', function (t) {
   t.ok(s.readable)
   t.absent(s.writable)
   t.absent(s.deletable)
+  t.absent(s.truncatable)
   t.absent(s.statable)
   s.read(0, 2, ondata)
   s.read(0, 2, ondata)
@@ -30,7 +31,7 @@ test('basic read', function (t) {
 })
 
 test('basic write', function (t) {
-  t.plan(2 * 2 + 4)
+  t.plan(2 * 2 + 5)
 
   const expected = [Buffer.from('hi'), Buffer.from('ho')]
   const s = new RAS({
@@ -43,6 +44,7 @@ test('basic write', function (t) {
   t.absent(s.readable)
   t.ok(s.writable)
   t.absent(s.deletable)
+  t.absent(s.truncatable)
   t.absent(s.statable)
   s.write(0, Buffer.from('hi'), onwrite)
   s.write(0, Buffer.from('ho'), onwrite)
@@ -53,12 +55,12 @@ test('basic write', function (t) {
 })
 
 test('basic del', function (t) {
-  t.plan(2 + 2 * 3 + 4)
+  t.plan(2 + 2 * 3 + 5)
 
   const s = new RAS({
     del: function (req) {
-      t.alike(req.offset, 0)
-      t.alike(req.size, 2)
+      t.is(req.offset, 0)
+      t.is(req.size, 2)
       req.callback(null)
     }
   })
@@ -66,6 +68,7 @@ test('basic del', function (t) {
   t.absent(s.readable)
   t.absent(s.writable)
   t.ok(s.deletable)
+  t.ok(s.truncatable)
   t.absent(s.statable)
   s.del(0, 2, ondelete)
   s.del(0, 2, ondelete)
@@ -76,8 +79,58 @@ test('basic del', function (t) {
   }
 })
 
+test('basic truncate', function (t) {
+  t.plan(2 + 2 * 3 + 5)
+
+  const s = new RAS({
+    truncate: function (req) {
+      t.is(req.offset, 2)
+      t.is(req.size, Infinity)
+      req.callback(null)
+    }
+  })
+
+  t.absent(s.readable)
+  t.absent(s.writable)
+  t.absent(s.deletable)
+  t.ok(s.truncatable)
+  t.absent(s.statable)
+  s.truncate(2, ontruncate)
+  s.truncate(2, ontruncate)
+  s.truncate(2) // cb is optional
+
+  function ontruncate (err) {
+    t.absent(err, 'no error')
+  }
+})
+
+test('basic truncate with del', function (t) {
+  t.plan(2 + 2 * 3 + 5)
+
+  const s = new RAS({
+    del: function (req) {
+      t.is(req.offset, 2)
+      t.is(req.size, Infinity)
+      req.callback(null)
+    }
+  })
+
+  t.absent(s.readable)
+  t.absent(s.writable)
+  t.ok(s.deletable)
+  t.ok(s.truncatable)
+  t.absent(s.statable)
+  s.truncate(2, ontruncate)
+  s.truncate(2, ontruncate)
+  s.truncate(2) // cb is optional
+
+  function ontruncate (err) {
+    t.absent(err, 'no error')
+  }
+})
+
 test('basic stat', function (t) {
-  t.plan(2 * 2 + 4)
+  t.plan(2 * 2 + 5)
 
   const s = new RAS({
     stat: function (req) {
@@ -88,6 +141,7 @@ test('basic stat', function (t) {
   t.absent(s.readable)
   t.absent(s.writable)
   t.absent(s.deletable)
+  t.absent(s.truncatable)
   t.ok(s.statable)
   s.stat(onstat)
   s.stat(onstat)
@@ -421,12 +475,12 @@ test('open error forwarded to dependents', function (t) {
 
   s.write(0, Buffer.from('hi'), function (err) {
     t.ok(err)
-    t.alike(err.message, 'Nope')
+    t.is(err.message, 'Nope')
   })
 
   s.read(0, 2, function (err) {
     t.ok(err)
-    t.alike(err.message, 'Nope')
+    t.is(err.message, 'Nope')
   })
 
   s.close(function (err) {
@@ -470,6 +524,10 @@ test('class extend', function (t) {
       req.callback(null)
     }
 
+    _truncate (req) {
+      req.callback(null)
+    }
+
     _stat (req) {
       req.callback(null)
     }
@@ -480,6 +538,7 @@ test('class extend', function (t) {
   t.ok(c.readable)
   t.ok(c.writable)
   t.ok(c.deletable)
+  t.ok(c.truncatable)
   t.ok(c.statable)
 })
 
