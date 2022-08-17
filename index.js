@@ -82,10 +82,11 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   truncate (offset, cb) {
     if (!cb) cb = noop
     openWritable(this)
-    this.run(new Request(this, TRUNCATE_OP, offset, Infinity, null, false, cb))
+    this.run(new Request(this, TRUNCATE_OP, offset, 0, null, false, cb))
   }
 
   _truncate (req) {
+    req.size = Infinity
     this._del(req)
   }
 

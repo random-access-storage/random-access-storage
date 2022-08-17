@@ -85,7 +85,7 @@ test('basic truncate', function (t) {
   const s = new RAS({
     truncate: function (req) {
       t.is(req.offset, 2)
-      t.is(req.size, Infinity)
+      t.is(req.size, 0)
       req.callback(null)
     }
   })
