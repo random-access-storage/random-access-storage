@@ -1,6 +1,6 @@
 {
   "name": "random-access-storage",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Easily make random-access-storage instances",
   "main": "index.js",
   "dependencies": {
