@@ -19,8 +19,9 @@ const STAT_OP = 4
 
 // BLOCKING_OPS
 const OPEN_OP = 5
-const CLOSE_OP = 6
-const DESTROY_OP = 7
+const SUSPEND_OP = 6
+const CLOSE_OP = 7
+const DESTROY_OP = 8
 
 module.exports = class RandomAccessStorage extends EventEmitter {
   constructor (opts = {}) {
@@ -32,6 +33,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     this._needsCreate = !!opts.createAlways
 
     this.opened = false
+    this.suspended = false
     this.closed = false
     this.destroyed = false
 
@@ -41,6 +43,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     if (opts.del) this._del = opts.del
     if (opts.truncate) this._truncate = opts.truncate
     if (opts.stat) this._stat = opts.stat
+    if (opts.suspend) this._suspend = opts.suspend
     if (opts.close) this._close = opts.close
     if (opts.destroy) this._destroy = opts.destroy
 
@@ -100,7 +103,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 
   open (cb) {
     if (!cb) cb = noop
-    if (this.opened && !this._needsOpen) return queueTick(() => cb(null))
+    if (this.opened && !this._needsOpen) return nextTickCallback(cb)
     queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, this._needsCreate, cb))
   }
 
@@ -108,9 +111,20 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     return DEFAULT_OPEN(req)
   }
 
+  suspend (cb) {
+    if (!cb) cb = noop
+    if (this.closed || this.suspended) return nextTickCallback(cb)
+    this._needsOpen = true
+    queueAndRun(this, new Request(this, SUSPEND_OP, 0, 0, null, false, cb))
+  }
+
+  _suspend (req) {
+    this._close(req)
+  }
+
   close (cb) {
     if (!cb) cb = noop
-    if (this.closed) return queueTick(() => cb(null))
+    if (this.closed) return nextTickCallback(cb)
     queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, false, cb))
   }
 
@@ -164,9 +178,20 @@ class Request {
     if (!err) {
       switch (this.type) {
         case OPEN_OP:
+          if (ra.suspended) {
+            ra.suspended = false
+            ra.emit('unsuspend')
+          }
           if (!ra.opened) {
             ra.opened = true
             ra.emit('open')
+          }
+          break
+
+        case SUSPEND_OP:
+          if (!ra.suspended) {
+            ra.suspended = true
+            ra.emit('suspend')
           }
           break
 
@@ -248,6 +273,11 @@ class Request {
         this._open()
         break
 
+      case SUSPEND_OP:
+        if (ra.closed || !ra.opened || ra.suspended) nextTick(this, null)
+        else ra._suspend(this)
+        break
+
       case CLOSE_OP:
         if (ra.closed || !ra.opened) nextTick(this, null)
         else ra._close(this)
@@ -296,4 +326,8 @@ function defaultImpl (err) {
 
 function nextTick (req, err, val) {
   queueTick(() => req.callback(err, val))
+}
+
+function nextTickCallback (cb) {
+  queueTick(() => cb(null))
 }
