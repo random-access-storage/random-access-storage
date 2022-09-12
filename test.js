@@ -276,26 +276,26 @@ test('close, no open', function (t) {
   s.del(0, 10, err => t.alike(err, new Error('Closed')))
 })
 
-test('destroy', function (t) {
+test('unlink', function (t) {
   t.plan(4)
 
   const s = new RAS({
     open: req => t.fail('no open'),
-    destroy: function (req) {
-      t.pass('destroying')
+    unlink: function (req) {
+      t.pass('unlinking')
       req.callback(null)
     }
   })
 
-  s.on('destroy', () => t.pass('destroy emitted'))
-  s.destroy()
-  s.destroy(function (err) {
+  s.on('unlink', () => t.pass('unlink emitted'))
+  s.unlink()
+  s.unlink(function (err) {
     t.absent(err, 'no error')
     t.pass('calls the callback')
   })
 })
 
-test('destroy closes first', function (t) {
+test('unlink closes first', function (t) {
   t.plan(2)
 
   const s = new RAS({
@@ -303,17 +303,17 @@ test('destroy closes first', function (t) {
       t.pass('closing')
       req.callback(null)
     },
-    destroy: function (req) {
+    unlink: function (req) {
       t.ok(s.closed, 'is closed')
       req.callback(null)
     }
   })
 
   s.open()
-  s.destroy()
+  s.unlink()
 })
 
-test('destroy with explicit close first', function (t) {
+test('unlink with explicit close first', function (t) {
   t.plan(2)
 
   const s = new RAS({
@@ -321,7 +321,7 @@ test('destroy with explicit close first', function (t) {
       t.pass('closing')
       req.callback(null)
     },
-    destroy: function (req) {
+    unlink: function (req) {
       t.ok(s.closed, 'is closed')
       req.callback(null)
     }
@@ -329,7 +329,7 @@ test('destroy with explicit close first', function (t) {
 
   s.open()
   s.close()
-  s.destroy()
+  s.unlink()
 })
 
 test('open and close', function (t) {
@@ -396,7 +396,7 @@ test('open and read', function (t) {
 
   const s = new RAS({
     open: function (req) {
-      t.not(req.create, 'no create')
+      t.not(s.writing, 'not writing')
       req.callback(null)
     },
     read: req => req.callback(null, Buffer.from('hi'))
@@ -413,10 +413,14 @@ test('open and read then write', function (t) {
 
   const s = new RAS({
     open: function (req) {
-      if (first) t.not(req.create, 'no create')
-      else t.ok(req.create, 'create')
+      if (first) {
+        first = false
+        t.not(s.writing, 'not yet writing')
+        req.callback(new Error('No storage'))
+        return
+      }
 
-      first = false
+      t.ok(s.writable, 'writing')
       req.callback(null)
     },
     read: req => req.callback(null, Buffer.from('hi')),
@@ -424,8 +428,8 @@ test('open and read then write', function (t) {
   })
 
   s.open()
-  s.read(0, 2, err => t.absent(err, 'no error'))
-  s.write(0, Buffer.from('hi'), err => t.absent(err, 'no error'))
+  s.read(0, 2, err => t.ok(err, 'error when reading'))
+  s.write(0, Buffer.from('hi'), err => t.absent(err, 'no error write'))
 })
 
 test('open and write', function (t) {
@@ -433,7 +437,7 @@ test('open and write', function (t) {
 
   const s = new RAS({
     open: function (req) {
-      t.ok(req.create, 'create')
+      t.ok(s.writing, 'is writing')
       req.callback(null)
     },
     read: req => req.callback(null, Buffer.from('hi')),
@@ -542,21 +546,6 @@ test('class extend', function (t) {
   t.ok(c.statable)
 })
 
-test('create always', function (t) {
-  t.plan(1)
-
-  const s = new RAS({
-    createAlways: true,
-
-    open: function (req) {
-      t.ok(req.create)
-      req.callback(null)
-    }
-  })
-
-  s.open()
-})
-
 test('suspend', function (t) {
   t.plan(1)
 
@@ -574,10 +563,6 @@ test('suspend', function (t) {
     suspend (req) {
       events.push('suspend')
       req.callback(null)
-    },
-    close (req) {
-      events.push('close')
-      req.callback(null)
     }
   })
 
@@ -586,7 +571,7 @@ test('suspend', function (t) {
       s.read(0, 5, function () {
         s.suspend(function () {
           s.close(function () {
-            t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+            t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend'])
           })
         })
       })
@@ -611,10 +596,6 @@ test('suspend background', function (t) {
     suspend (req) {
       events.push('suspend')
       req.callback(null)
-    },
-    close (req) {
-      events.push('close')
-      req.callback(null)
     }
   })
 
@@ -623,7 +604,7 @@ test('suspend background', function (t) {
     s.read(0, 5, function () {
       s.suspend()
       s.close(function () {
-        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend'])
       })
     })
   })
@@ -646,10 +627,6 @@ test('suspend parallel', function (t) {
     suspend (req) {
       events.push('suspend')
       req.callback(null)
-    },
-    close (req) {
-      events.push('close')
-      req.callback(null)
     }
   })
 
@@ -665,7 +642,7 @@ test('suspend parallel', function (t) {
       s.suspend()
       s.suspend()
       s.close(function () {
-        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend'])
       })
     })
   })

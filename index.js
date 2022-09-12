@@ -8,7 +8,7 @@ const NOT_STATABLE = defaultImpl(new Error('Not statable'))
 
 const DEFAULT_OPEN = defaultImpl(null)
 const DEFAULT_CLOSE = defaultImpl(null)
-const DEFAULT_DESTROY = defaultImpl(null)
+const DEFAULT_UNLINK = defaultImpl(null)
 
 // NON_BLOCKING_OPS
 const READ_OP = 0
@@ -21,31 +21,33 @@ const STAT_OP = 4
 const OPEN_OP = 5
 const SUSPEND_OP = 6
 const CLOSE_OP = 7
-const DESTROY_OP = 8
+const UNLINK_OP = 8
 
 module.exports = class RandomAccessStorage extends EventEmitter {
-  constructor (opts = {}) {
+  constructor (opts) {
     super()
 
     this._queued = []
     this._pending = 0
     this._needsOpen = true
-    this._needsCreate = !!opts.createAlways
 
     this.opened = false
     this.suspended = false
     this.closed = false
-    this.destroyed = false
+    this.unlinked = false
+    this.writing = false
 
-    if (opts.open) this._open = opts.open
-    if (opts.read) this._read = opts.read
-    if (opts.write) this._write = opts.write
-    if (opts.del) this._del = opts.del
-    if (opts.truncate) this._truncate = opts.truncate
-    if (opts.stat) this._stat = opts.stat
-    if (opts.suspend) this._suspend = opts.suspend
-    if (opts.close) this._close = opts.close
-    if (opts.destroy) this._destroy = opts.destroy
+    if (opts) {
+      if (opts.open) this._open = opts.open
+      if (opts.read) this._read = opts.read
+      if (opts.write) this._write = opts.write
+      if (opts.del) this._del = opts.del
+      if (opts.truncate) this._truncate = opts.truncate
+      if (opts.stat) this._stat = opts.stat
+      if (opts.suspend) this._suspend = opts.suspend
+      if (opts.close) this._close = opts.close
+      if (opts.unlink) this._unlink = opts.unlink
+    }
 
     this.readable = this._read !== RandomAccessStorage.prototype._read
     this.writable = this._write !== RandomAccessStorage.prototype._write
@@ -55,7 +57,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   }
 
   read (offset, size, cb) {
-    this.run(new Request(this, READ_OP, offset, size, null, false, cb))
+    this.run(new Request(this, READ_OP, offset, size, null, cb), false)
   }
 
   _read (req) {
@@ -64,8 +66,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 
   write (offset, data, cb) {
     if (!cb) cb = noop
-    openWritable(this)
-    this.run(new Request(this, WRITE_OP, offset, data.length, data, false, cb))
+    this.run(new Request(this, WRITE_OP, offset, data.length, data, cb), true)
   }
 
   _write (req) {
@@ -74,8 +75,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 
   del (offset, size, cb) {
     if (!cb) cb = noop
-    openWritable(this)
-    this.run(new Request(this, DEL_OP, offset, size, null, false, cb))
+    this.run(new Request(this, DEL_OP, offset, size, null, cb), true)
   }
 
   _del (req) {
@@ -84,8 +84,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
 
   truncate (offset, cb) {
     if (!cb) cb = noop
-    openWritable(this)
-    this.run(new Request(this, TRUNCATE_OP, offset, 0, null, false, cb))
+    this.run(new Request(this, TRUNCATE_OP, offset, 0, null, cb), true)
   }
 
   _truncate (req) {
@@ -94,7 +93,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   }
 
   stat (cb) {
-    this.run(new Request(this, STAT_OP, 0, 0, null, false, cb))
+    this.run(new Request(this, STAT_OP, 0, 0, null, cb), false)
   }
 
   _stat (req) {
@@ -104,7 +103,8 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   open (cb) {
     if (!cb) cb = noop
     if (this.opened && !this._needsOpen) return nextTickCallback(cb)
-    queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, this._needsCreate, cb))
+    this._needsOpen = false
+    queueAndRun(this, new Request(this, OPEN_OP, 0, 0, null, cb))
   }
 
   _open (req) {
@@ -115,7 +115,7 @@ module.exports = class RandomAccessStorage extends EventEmitter {
     if (!cb) cb = noop
     if (this.closed || this.suspended) return nextTickCallback(cb)
     this._needsOpen = true
-    queueAndRun(this, new Request(this, SUSPEND_OP, 0, 0, null, false, cb))
+    queueAndRun(this, new Request(this, SUSPEND_OP, 0, 0, null, cb))
   }
 
   _suspend (req) {
@@ -125,39 +125,41 @@ module.exports = class RandomAccessStorage extends EventEmitter {
   close (cb) {
     if (!cb) cb = noop
     if (this.closed) return nextTickCallback(cb)
-    queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, false, cb))
+    queueAndRun(this, new Request(this, CLOSE_OP, 0, 0, null, cb))
   }
 
   _close (req) {
     return DEFAULT_CLOSE(req)
   }
 
-  destroy (cb) {
+  unlink (cb) {
     if (!cb) cb = noop
     if (!this.closed) this.close(noop)
-    queueAndRun(this, new Request(this, DESTROY_OP, 0, 0, null, false, cb))
+    queueAndRun(this, new Request(this, UNLINK_OP, 0, 0, null, cb))
   }
 
-  _destroy (req) {
-    return DEFAULT_DESTROY(req)
+  _unlink (req) {
+    return DEFAULT_UNLINK(req)
   }
 
-  run (req) {
+  run (req, writing) {
+    if (writing && !this.writing) {
+      this.writing = true
+      this._needsOpen = true
+    }
+
     if (this._needsOpen) this.open(noop)
     if (this._queued.length) this._queued.push(req)
     else req._run()
   }
 }
 
-function noop () {}
-
 class Request {
-  constructor (self, type, offset, size, data, create, cb) {
+  constructor (self, type, offset, size, data, cb) {
     this.type = type
     this.offset = offset
     this.size = size
     this.data = data
-    this.create = create
     this.storage = self
 
     this._sync = false
@@ -168,14 +170,20 @@ class Request {
   _maybeOpenError (err) {
     if (this.type !== OPEN_OP) return
     const queued = this.storage._queued
-    for (let i = 0; i < queued.length; i++) queued[i]._openError = err
+    for (let i = 1; i < queued.length; i++) {
+      const q = queued[i]
+      if (q.type === OPEN_OP) break
+      q._openError = err
+    }
   }
 
   _unqueue (err) {
     const ra = this.storage
     const queued = ra._queued
 
-    if (!err) {
+    if (err) {
+      this._maybeOpenError(err)
+    } else if (this.type > 4) {
       switch (this.type) {
         case OPEN_OP:
           if (ra.suspended) {
@@ -202,15 +210,13 @@ class Request {
           }
           break
 
-        case DESTROY_OP:
-          if (!ra.destroyed) {
-            ra.destroyed = true
-            ra.emit('destroy')
+        case UNLINK_OP:
+          if (!ra.unlinked) {
+            ra.unlinked = true
+            ra.emit('unlink')
           }
           break
       }
-    } else {
-      this._maybeOpenError(err)
     }
 
     if (queued.length && queued[0] === this) queued.shift()
@@ -235,10 +241,9 @@ class Request {
   _open () {
     const ra = this.storage
 
-    if (ra.opened && !ra._needsOpen) return nextTick(this, null)
+    if (ra.opened && !ra.suspended) return nextTick(this, null)
     if (ra.closed) return nextTick(this, new Error('Closed'))
 
-    ra._needsOpen = false
     ra._open(this)
   }
 
@@ -279,13 +284,13 @@ class Request {
         break
 
       case CLOSE_OP:
-        if (ra.closed || !ra.opened) nextTick(this, null)
+        if (ra.closed || !ra.opened || ra.suspended) nextTick(this, null)
         else ra._close(this)
         break
 
-      case DESTROY_OP:
-        if (ra.destroyed) nextTick(this, null)
-        else ra._destroy(this)
+      case UNLINK_OP:
+        if (ra.unlinked) nextTick(this, null)
+        else ra._unlink(this)
         break
     }
 
@@ -302,17 +307,10 @@ function drainQueue (self) {
   const queued = self._queued
 
   while (queued.length > 0) {
-    const blocking = queued[0].type > 3
+    const blocking = queued[0].type > 4
     if (!blocking || !self._pending) queued[0]._run()
     if (blocking) return
     queued.shift()
-  }
-}
-
-function openWritable (self) {
-  if (!self._needsCreate) {
-    self._needsOpen = true
-    self._needsCreate = true
   }
 }
 
@@ -331,3 +329,5 @@ function nextTick (req, err, val) {
 function nextTickCallback (cb) {
   queueTick(() => cb(null))
 }
+
+function noop () {}
