@@ -556,3 +556,117 @@ test('create always', function (t) {
 
   s.open()
 })
+
+test('suspend', function (t) {
+  t.plan(1)
+
+  const events = []
+
+  const s = new RAS({
+    open (req) {
+      events.push('open')
+      req.callback(null)
+    },
+    read (req) {
+      events.push('read')
+      req.callback(null, Buffer.from('hello'))
+    },
+    suspend (req) {
+      events.push('suspend')
+      req.callback(null)
+    },
+    close (req) {
+      events.push('close')
+      req.callback(null)
+    }
+  })
+
+  s.read(0, 5, function () {
+    s.suspend(function () {
+      s.read(0, 5, function () {
+        s.suspend(function () {
+          s.close(function () {
+            t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+          })
+        })
+      })
+    })
+  })
+})
+
+test('suspend background', function (t) {
+  t.plan(1)
+
+  const events = []
+
+  const s = new RAS({
+    open (req) {
+      events.push('open')
+      req.callback(null)
+    },
+    read (req) {
+      events.push('read')
+      req.callback(null, Buffer.from('hello'))
+    },
+    suspend (req) {
+      events.push('suspend')
+      req.callback(null)
+    },
+    close (req) {
+      events.push('close')
+      req.callback(null)
+    }
+  })
+
+  s.read(0, 5, function () {
+    s.suspend()
+    s.read(0, 5, function () {
+      s.suspend()
+      s.close(function () {
+        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+      })
+    })
+  })
+})
+
+test('suspend parallel', function (t) {
+  t.plan(1)
+
+  const events = []
+
+  const s = new RAS({
+    open (req) {
+      events.push('open')
+      req.callback(null)
+    },
+    read (req) {
+      events.push('read')
+      req.callback(null, Buffer.from('hello'))
+    },
+    suspend (req) {
+      events.push('suspend')
+      req.callback(null)
+    },
+    close (req) {
+      events.push('close')
+      req.callback(null)
+    }
+  })
+
+  s.read(0, 5, function () {
+    s.suspend()
+    s.suspend()
+    s.suspend()
+    s.suspend()
+    s.suspend()
+    s.read(0, 5, function () {
+      s.suspend()
+      s.suspend()
+      s.suspend()
+      s.suspend()
+      s.close(function () {
+        t.alike(events, ['open', 'read', 'suspend', 'open', 'read', 'suspend', 'close'])
+      })
+    })
+  })
+})
