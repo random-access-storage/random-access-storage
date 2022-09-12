@@ -68,6 +68,7 @@ Make a new instance. Options include:
   del: fn, // sets ._del
   truncate: fn, // sets ._truncate
   stat: fn, // sets ._stat
+  suspend: fn, // sets ._suspend
   close: fn, // sets ._close
   destroy: fn // sets ._destroy
 }
@@ -97,6 +98,10 @@ True if the storage implements `._stat`.
 
 True if the storage has been fully opened.
 
+#### `storage.suspendable`
+
+True if the storage implements `._suspend`.
+
 #### `storage.closed`
 
 True if the storage has been fully closed.
@@ -116,6 +121,14 @@ Emitted when the storage is fully closed.
 #### `storage.on('destroy')`
 
 Emitted when the storage is fully destroyed.
+
+#### `storage.on('suspend')`
+
+Emitted when the storage is fully suspended
+
+#### `storage.on('unsuspend')`
+
+Emitted when the storage comes out of suspension.
 
 #### `storage.open(cb)`
 
@@ -211,6 +224,18 @@ Implement storage stat.
 Call `req.callback(err, statObject)` when the stat has completed.
 
 Note that this is guaranteed to run after the storage has been opened and not after it has been closed.
+
+#### `storage.suspend([callback])`
+
+Suspend (temporarily close) the storage instance.
+
+#### `storage._suspend(req)`
+
+Implement storage suspend. Defaults to calling `_close`.
+
+Optionally implement this to add a way for your storage instance to temporarily free resources.
+
+Call `req.callback(err)` when the storage has been fully suspended.
 
 #### `storage.close([callback])`
 
