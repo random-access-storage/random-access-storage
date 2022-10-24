@@ -70,7 +70,7 @@ Make a new instance. Options include:
   stat: fn, // sets ._stat
   suspend: fn, // sets ._suspend
   close: fn, // sets ._close
-  destroy: fn // sets ._destroy
+  unlink: fn // sets ._unlink
 }
 ```
 
@@ -106,9 +106,13 @@ True if the storage implements `._suspend`.
 
 True if the storage has been fully closed.
 
-#### `storage.destroyed`
+#### `storage.unlinked`
 
-True is the destorage has been fully destroyed.
+True if the storage has been fully unlinked.
+
+#### `storage.writing`
+
+True if the storage is currently being written to.
 
 #### `storage.on('open')`
 
@@ -118,9 +122,9 @@ Emitted when the storage is fully open.
 
 Emitted when the storage is fully closed.
 
-#### `storage.on('destroy')`
+#### `storage.on('unlink')`
 
-Emitted when the storage is fully destroyed.
+Emitted when the storage is fully unlinked.
 
 #### `storage.on('suspend')`
 
@@ -249,15 +253,15 @@ Call `req.callback(err)` when the storage is fully closed.
 
 Note this is guaranteed to run after all pending read/write/stat/del operations has finished and no methods will run after.
 
-#### `storage.destroy([callback])`
+#### `storage.unlink([callback])`
 
-Destroy the storage instance, removing all underlying data.
+Unlink the storage instance, removing all underlying data.
 
-#### `storage._destroy(req)`
+#### `storage._unlink(req)`
 
-Implement storage destroy.
+Implement storage unlink.
 
-Call `req.callback(err)` when the storage has been fully destroyed.
+Call `req.callback(err)` when the storage has been fully unlinked.
 
 Note this is guaranteed to run after `.close()` has been called and no methods will be run after.
 
