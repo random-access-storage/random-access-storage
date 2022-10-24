@@ -98,10 +98,6 @@ True if the storage implements `._stat`.
 
 True if the storage has been fully opened.
 
-#### `storage.suspendable`
-
-True if the storage implements `._suspend`.
-
 #### `storage.closed`
 
 True if the storage has been fully closed.
