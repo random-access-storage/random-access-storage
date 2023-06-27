@@ -232,8 +232,8 @@ class Request {
 
   _openAndNotClosed () {
     const ra = this.storage
-    if (ra.opened && !ra.closed) return true
-    if (!ra.opened) nextTick(this, this._openError || new Error('Not opened'))
+    if (ra.opened && !ra.closed && !ra.suspended) return true
+    if (!ra.opened || ra.suspended) nextTick(this, this._openError || new Error('Not opened'))
     else if (ra.closed) nextTick(this, new Error('Closed'))
     return false
   }
